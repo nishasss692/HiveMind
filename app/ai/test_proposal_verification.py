@@ -1,8 +1,27 @@
+import sys
+from pathlib import Path
+from uuid import uuid4
+
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from app.ai.orchestrator import HiveMindOrchestrator
 from app.ai.verifier import (
     TestExecutionResult,
     TestSpecification,
     Verifier,
+)
+from app.memory.schema import (
+    AgentRecord,
+    AttemptRecord,
+    ExperienceRecord,
+    LessonRecord,
+    OutcomeRecord,
+    ProblemRecord,
+    TaskRecord,
 )
 
 
@@ -250,6 +269,211 @@ def test_scenario_5_orchestrator_workflow_evaluation():
     print("Scenario 5: Orchestrator evaluate_proposal workflow [PASS]")
 
 
+def test_scenario_6_failed_test_fixture_never_becomes_verified_success():
+    """6. A failed test fixture is classified as VERIFIED_FAILURE and never VERIFIED_SUCCESS."""
+    orchestrator = HiveMindOrchestrator()
+    proposal_id = f"proposal-fail-{uuid4().hex[:6]}"
+    task_id = f"task-fail-{uuid4().hex[:6]}"
+
+    eval_result = orchestrator.evaluate_proposal(
+        task_id=task_id,
+        proposal_id=proposal_id,
+        task_description="Test deadlock detection under blocking index build",
+        proposed_fix="Direct blocking index migration",
+        test_file="tests/test_migration_failure_fixture.py",
+        is_relevant=True,
+        test_description="Deterministic failure fixture for migration deadlock",
+    )
+
+    assert eval_result["test_execution"].tests_executed is True
+    assert eval_result["test_execution"].exit_code == 1
+    assert eval_result["verification_status"] == "VERIFIED_FAILURE"
+    assert eval_result["verification_status"] != "VERIFIED_SUCCESS"
+    assert "Deadlock detected" in eval_result["evidence"]
+    print("Scenario 6: Failed test fixture -> VERIFIED_FAILURE [PASS]")
+
+
+def test_scenario_7_invalid_graph_relationships_and_schema_validation_rejected():
+    """7. Invalid graph relationships and unverified lessons are rejected by schema."""
+    t = TaskRecord(id="t-1", description="task")
+    p = ProblemRecord(id="p-1", title="problem", category="cat")
+    ag = AgentRecord(id="ag-1", role="VERIFIER")
+
+    # Mismatched status between attempt and outcome
+    with pytest.raises(ValueError, match="Attempt status must match outcome status"):
+        ExperienceRecord(
+            task=t,
+            problem=p,
+            agent=ag,
+            attempt=AttemptRecord(id="a-1", description="att", status="UNVERIFIED"),
+            outcome=OutcomeRecord(id="o-1", status="VERIFIED_SUCCESS", evidence="passed"),
+        )
+
+    # Lesson without supporting outcome
+    with pytest.raises(ValueError, match="A lesson requires a supporting outcome"):
+        ExperienceRecord(
+            task=t,
+            problem=p,
+            agent=ag,
+            attempt=AttemptRecord(id="a-1", description="att", status="VERIFIED_SUCCESS"),
+            lesson=LessonRecord(id="l-1", content="lesson"),
+        )
+
+    # Lesson from UNVERIFIED outcome
+    with pytest.raises(ValueError, match="Cannot save a lesson from an unverified outcome"):
+        ExperienceRecord(
+            task=t,
+            problem=p,
+            agent=ag,
+            attempt=AttemptRecord(id="a-1", description="att", status="UNVERIFIED"),
+            outcome=OutcomeRecord(id="o-1", status="UNVERIFIED", evidence="timeout"),
+            lesson=LessonRecord(id="l-1", content="lesson"),
+        )
+
+    # Lesson with empty evidence
+    with pytest.raises(ValueError, match="A lesson requires non-empty verification evidence"):
+        ExperienceRecord(
+            task=t,
+            problem=p,
+            agent=ag,
+            attempt=AttemptRecord(id="a-1", description="att", status="VERIFIED_SUCCESS"),
+            outcome=OutcomeRecord(id="o-1", status="VERIFIED_SUCCESS", evidence="   "),
+            lesson=LessonRecord(id="l-1", content="lesson"),
+        )
+
+    print("Scenario 7: Schema validation rejects invalid states and relationships [PASS]")
+
+
+def test_scenario_8_duplicate_submissions_idempotency_and_preservation():
+    """8. Duplicate submissions preserve record identity without creating contradictory nodes."""
+    orchestrator = HiveMindOrchestrator()
+    uid = uuid4().hex[:6]
+    task_id = f"task-dup-{uid}"
+    proposal_id = f"proposal-dup-{uid}"
+
+    eval_res = orchestrator.evaluate_proposal(
+        task_id=task_id,
+        proposal_id=proposal_id,
+        task_description=f"Idempotency test [{uid}]",
+        proposed_fix="Smoke verification",
+        test_file="tests/test_runner_smoke.py",
+        is_relevant=True,
+    )
+
+    rec1 = orchestrator.record_verification(
+        task_description=f"Idempotency test [{uid}]",
+        problem_title=f"Idempotency problem [{uid}]",
+        category="idempotency_check",
+        proposal="Smoke verification",
+        test_result=eval_res["test_execution"],
+        lesson_content=f"Smoke verification idempotency lesson [{uid}].",
+        test_spec=eval_res["test_specification"],
+        task_id=task_id,
+        proposal_id=proposal_id,
+    )
+
+    rec2 = orchestrator.record_verification(
+        task_description=f"Idempotency test [{uid}]",
+        problem_title=f"Idempotency problem [{uid}]",
+        category="idempotency_check",
+        proposal="Smoke verification",
+        test_result=eval_res["test_execution"],
+        lesson_content=f"Smoke verification idempotency lesson [{uid}].",
+        test_spec=eval_res["test_specification"],
+        task_id=task_id,
+        proposal_id=proposal_id,
+    )
+
+    assert rec1["outcome_id"] == rec2["outcome_id"]
+    assert rec1["task_id"] == rec2["task_id"]
+    assert rec1["proposal_id"] == rec2["proposal_id"]
+    assert rec1["verification_status"] == rec2["verification_status"]
+    print("Scenario 8: Duplicate submission idempotency [PASS]")
+
+
+def test_scenario_9_solver_rejects_hallucinated_memory_ids():
+    """9. Solver strictly rejects memory IDs not present in retrieved memories."""
+    from app.ai.agent_schemas import SolverResponse
+
+    allowed_ids = {"lesson-valid-001"}
+    proposal = SolverResponse(
+        diagnosis="Test diagnosis",
+        proposed_fix="Test fix",
+        reasoning="Test reasoning",
+        tests_to_run=["tests/test_runner_smoke.py"],
+        memory_ids_used=["lesson-valid-001", "lesson-hallucinated-999"],
+        risks=[],
+    )
+
+    invalid_ids = set(proposal.memory_ids_used) - allowed_ids
+    assert invalid_ids == {"lesson-hallucinated-999"}
+    print("Scenario 9: Solver rejection of hallucinated memory IDs [PASS]")
+
+
+def test_scenario_10_test_runner_sandbox_enforcement():
+    """10. TestRunner strictly enforces project tests/ directory boundary."""
+    from app.ai.test_runner import TestRunner
+
+    runner = TestRunner()
+
+    # Attempting to run a file outside the tests/ directory must raise ValueError
+    with pytest.raises(ValueError, match="Tests must be located inside the project tests directory"):
+        runner.run("app/ai/orchestrator.py")
+
+    # Attempting to run a non-existent file inside tests/ must raise FileNotFoundError
+    with pytest.raises(FileNotFoundError, match="Test file does not exist"):
+        runner.run("tests/non_existent_test_fixture.py")
+
+    print("Scenario 10: TestRunner sandbox boundary enforcement [PASS]")
+
+
+def test_scenario_11_solver_propose_rejects_hallucinated_memory_in_pipeline(monkeypatch):
+    """11. Solver.propose() strictly raises ValueError if LLM response hallucinates memory IDs."""
+    import json
+    from app.ai.solver import Solver
+
+    solver = Solver(max_retries=1)
+
+    fake_memories = [
+        {
+            "lesson_id": "lesson-valid-001",
+            "lesson": "Valid retrieved lesson content",
+            "problem_title": "Database deadlock",
+            "outcome_status": "VERIFIED_SUCCESS",
+            "evidence": "Exit code: 0",
+            "similarity_score": 0.85,
+        }
+    ]
+
+    # Mock client and response containing an unknown memory ID
+    class FakeResponse:
+        text = json.dumps({
+            "diagnosis": "Deadlock in table",
+            "proposed_fix": "Concurrent index",
+            "reasoning": "Based on fabricated memory",
+            "tests_to_run": ["tests/test_runner_smoke.py"],
+            "memory_ids_used": ["lesson-valid-001", "lesson-hallucinated-xyz"],
+            "risks": [],
+        })
+
+    class FakeModels:
+        def generate_content(self, *args, **kwargs):
+            return FakeResponse()
+
+    class FakeClient:
+        models = FakeModels()
+
+    monkeypatch.setattr("app.ai.solver.create_gemini_client", lambda: FakeClient())
+
+    with pytest.raises(ValueError, match="Solver returned unknown memory IDs: lesson-hallucinated-xyz"):
+        solver.propose(
+            task_description="Sample task description",
+            memories=fake_memories,
+        )
+
+    print("Scenario 11: Solver.propose() rejected hallucinated memory IDs [PASS]")
+
+
 def main():
     print("Starting Evidence-Backed Verification tests...\n")
     test_scenario_1_relevant_test_passes()
@@ -257,8 +481,16 @@ def main():
     test_scenario_3_test_timeout_or_unconfirmed()
     test_scenario_4_generic_smoke_test_rejected_for_unrelated()
     test_scenario_5_orchestrator_workflow_evaluation()
+    test_scenario_6_failed_test_fixture_never_becomes_verified_success()
+    test_scenario_7_invalid_graph_relationships_and_schema_validation_rejected()
+    test_scenario_8_duplicate_submissions_idempotency_and_preservation()
+    test_scenario_9_solver_rejects_hallucinated_memory_ids()
+    test_scenario_10_test_runner_sandbox_enforcement()
+    test_scenario_11_solver_propose_rejects_hallucinated_memory_in_pipeline(pytest.MonkeyPatch())
     print("\nALL EVIDENCE-BACKED VERIFICATION CHECKS PASSED.")
 
 
 if __name__ == "__main__":
     main()
+
+

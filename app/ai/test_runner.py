@@ -14,6 +14,8 @@ TESTS_ROOT = (PROJECT_ROOT / "tests").resolve()
 class TestRunner:
     """Runs an explicitly selected pytest file inside the tests directory."""
 
+    __test__ = False
+
     def __init__(self, timeout_seconds: int = 60):
         if timeout_seconds < 1:
             raise ValueError("Timeout must be at least 1 second.")

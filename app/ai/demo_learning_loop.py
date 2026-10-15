@@ -17,7 +17,14 @@ Note:
   test execution and verification safely.
 """
 
+import sys
+from pathlib import Path
 from uuid import uuid4
+
+# Ensure project root is in sys.path when script is executed directly
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.ai.agent_schemas import SolverResponse
 from app.ai.orchestrator import HiveMindOrchestrator
@@ -135,6 +142,9 @@ def main():
     print(f"Tests Confirmed:     {eval_result['test_execution'].tests_executed}")
     print(f"Exit Code:           {eval_result['test_execution'].exit_code}")
     print(f"Verification Status: {eval_result['verification_status']}")
+    print("\nVerification Evidence (Audit Trail):")
+    for line in eval_result["evidence"].splitlines()[:6]:
+        print(f"  | {line}")
 
     assert eval_result["verification_status"] == "VERIFIED_SUCCESS"
 
@@ -165,10 +175,11 @@ def main():
     saved_lesson_id = record_result["lesson_id"]
     saved_outcome_id = record_result["outcome_id"]
 
-    print(f"Lesson Saved: {record_result['lesson_saved']}")
-    print(f"Lesson ID:    {saved_lesson_id}")
-    print(f"Outcome ID:   {saved_outcome_id}")
-    print(f"Status:       {record_result['verification_status']}")
+    print(f"Lesson Saved:        {record_result['lesson_saved']}")
+    print(f"Lesson ID:           {saved_lesson_id}")
+    print(f"Outcome ID:          {saved_outcome_id}")
+    print(f"Verification Status: {record_result['verification_status']}")
+    print("Graph Structure:     (Task)->(Problem)->(Attempt)->(Outcome) & (Lesson)->(Outcome)")
 
     # -------------------------------------------------------------
     # STAGE 4: Second Similar Task Submission (Cross-Task Learning)
@@ -204,6 +215,7 @@ def main():
     print(f"  Similarity Score:      {matching_lesson['similarity_score']}")
     print(f"  Supporting Outcome:    {matching_lesson['outcome_status']}")
     print(f"  Lesson Content:        {matching_lesson['lesson']}")
+    print(f"  Supporting Evidence:   {matching_lesson['evidence'].splitlines()[0]}")
 
     # -------------------------------------------------------------
     # STAGE 5: Task 2 Proposal Grounded in Learned Experience
@@ -222,6 +234,7 @@ def main():
     print(f"Task 2 Proposal ID:    {proposal_2_data['proposal_id']}")
     print(f"Memories Used by Fix:  {proposal_2.memory_ids_used}")
     print(f"Grounding Reasoning:   {proposal_2.reasoning}")
+    print(f"Grounded in Task 1:    {saved_lesson_id in proposal_2.memory_ids_used}")
 
     assert saved_lesson_id in proposal_2.memory_ids_used
 

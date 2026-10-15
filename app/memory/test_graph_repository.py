@@ -1,4 +1,11 @@
 
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from app.memory.graph_repository import GraphMemoryRepository
 from app.memory.schema import (
     AgentRecord,
@@ -29,7 +36,7 @@ def main() -> None:
             id="problem-step2-001",
             title="Migration dependency error",
             category="database_migration",
-            description="Migration ordering causes a schema inconsistency",
+            description="Migration ordering causes a schema inconsistency during database upgrade",
         ),
         agent=AgentRecord(
             id="agent-solver",
@@ -65,7 +72,7 @@ def main() -> None:
                 "dependencies and validate the resulting schema "
                 "before relying on a direct column rename."
             ),
-            confidence=0.7,
+            confidence=0.95,
         ),
     )
 

@@ -14,6 +14,8 @@ VerificationStatus = Literal[
 class TestExecutionResult(BaseModel):
     """Results reported by a test runner or controlled test fixture."""
 
+    __test__ = False
+
     command: str
     exit_code: int | None
     tests_executed: bool
@@ -24,6 +26,8 @@ class TestExecutionResult(BaseModel):
 
 class TestSpecification(BaseModel):
     """Explicit specification of tests designated to verify a proposal."""
+
+    __test__ = False
 
     proposal_id: str
     test_file: str
