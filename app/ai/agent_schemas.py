@@ -3,6 +3,10 @@ from pydantic import BaseModel, Field
 
 
 class SolverResponse(BaseModel):
+    proposal_id: str | None = Field(
+        default=None,
+        description="Unique identifier for this proposal.",
+    )
     diagnosis: str = Field(
         description="Likely cause of the reported problem."
     )

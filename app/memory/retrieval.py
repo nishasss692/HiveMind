@@ -47,8 +47,8 @@ class MemoryRetriever:
         category: str | None = None,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
-        if not task_description.strip():
-            raise ValueError("Task description cannot be empty")
+        if not task_description or not task_description.strip():
+            return []
 
         if not 1 <= limit <= 10:
             raise ValueError("limit must be between 1 and 10")
@@ -121,10 +121,18 @@ class MemoryRetriever:
                 "similarity_score": round(score, 4),
             })
 
-        candidates.sort(
+        # Deduplicate candidates by lesson_id, keeping the highest similarity score
+        best_by_lesson: dict[str, dict[str, Any]] = {}
+        for candidate in candidates:
+            lid = candidate["lesson_id"]
+            if lid not in best_by_lesson or candidate["similarity_score"] > best_by_lesson[lid]["similarity_score"]:
+                best_by_lesson[lid] = candidate
+
+        unique_candidates = list(best_by_lesson.values())
+        unique_candidates.sort(
             key=lambda item: item["similarity_score"],
             reverse=True,
         )
 
-        return candidates[:limit]
+        return unique_candidates[:limit]
 

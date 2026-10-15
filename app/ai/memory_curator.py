@@ -30,6 +30,9 @@ class MemoryCurator:
         proposed_solution: str,
         verification: VerificationResult,
         lesson_content: str | None = None,
+        task_id: str | None = None,
+        problem_id: str | None = None,
+        attempt_id: str | None = None,
     ) -> ExperienceRecord:
         """Save an outcome and, when verified, its reusable lesson.
 
@@ -62,25 +65,25 @@ class MemoryCurator:
         if lesson_content is not None and not lesson_content.strip():
             raise ValueError("Lesson content cannot be blank.")
 
-        task_id = f"task-{uuid4().hex}"
-        problem_id = f"problem-{uuid4().hex}"
-        attempt_id = f"attempt-{uuid4().hex}"
-        outcome_id = f"outcome-{uuid4().hex}"
+        final_task_id = task_id or f"task-{uuid4().hex}"
+        final_problem_id = problem_id or f"problem-{uuid4().hex}"
+        final_attempt_id = attempt_id or f"attempt-{uuid4().hex}"
+        final_outcome_id = f"outcome-{final_attempt_id}"
 
         task = TaskRecord(
-            id=task_id,
+            id=final_task_id,
             description=task_description,
         )
 
         problem = ProblemRecord(
-            id=problem_id,
+            id=final_problem_id,
             title=problem_title,
             category=category,
             description=task_description,
         )
 
         attempt = AttemptRecord(
-            id=attempt_id,
+            id=final_attempt_id,
             description=(
                 f"Verification of proposed solution: "
                 f"{problem_title}"
@@ -114,7 +117,7 @@ class MemoryCurator:
             )
 
         outcome = OutcomeRecord(
-            id=outcome_id,
+            id=final_outcome_id,
             status=verification.status,
             evidence=verification.evidence,
         )

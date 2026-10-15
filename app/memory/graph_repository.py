@@ -25,6 +25,15 @@ class GraphMemoryRepository:
 
     def save_experience(self, experience: ExperienceRecord) -> None:
         """Save an attempt and its related evidence without deleting history."""
+        if not isinstance(experience, ExperienceRecord):
+            raise TypeError("Expected an instance of ExperienceRecord")
+
+        if experience.lesson is not None:
+            if experience.outcome is None:
+                raise ValueError("Cannot save a lesson without a supporting outcome")
+            if experience.outcome.status == "UNVERIFIED":
+                raise ValueError("Cannot save a lesson from an unverified outcome")
+
         data = experience
 
         # Task and problem.
@@ -268,6 +277,9 @@ class GraphMemoryRepository:
         limit: int = 5,
     ) -> list[dict[str, Any]]:
         """Retrieve lessons backed by verified outcomes."""
+        if not category or not category.strip():
+            return []
+
         if not 1 <= limit <= 20:
             raise ValueError("limit must be between 1 and 20")
 
