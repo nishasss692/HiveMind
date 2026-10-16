@@ -39,9 +39,19 @@ def get_postgres_test_url() -> str | None:
 
 @pytest.fixture(scope="module")
 def pg_conn_str():
-    """Fixture providing PostgreSQL test connection string, skipping if unavailable."""
+    """Fixture providing PostgreSQL test connection string, skipping if unavailable locally or failing in CI."""
+    if psycopg is None:
+        if os.getenv("CI"):
+            pytest.fail("psycopg is not installed. PostgreSQL integration tests are required in CI.")
+        pytest.skip("psycopg is not installed.")
+
     url = get_postgres_test_url()
     if not url:
+        if os.getenv("CI"):
+            pytest.fail(
+                "PostgreSQL integration tests are required in CI, but no connection could be established. "
+                "Ensure PostgreSQL service container is running and POSTGRES_TEST_URL is configured."
+            )
         pytest.skip(
             "PostgreSQL test database unavailable. "
             "Start the isolated test container (`docker run -d --name hivemind-postgres-test -p 5433:5432 "
