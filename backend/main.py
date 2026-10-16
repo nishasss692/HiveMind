@@ -77,7 +77,9 @@ async def value_error_handler(request: Request, exc: ValueError):
         or "requires lesson_content" in msg_lower
     ):
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=getattr(
+                status, "HTTP_422_UNPROCESSABLE_CONTENT", 422
+            ),
             content={"detail": msg},
         )
 

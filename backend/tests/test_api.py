@@ -393,3 +393,279 @@ def test_persist_unevaluated_proposal_rejected():
         },
     )
     assert persist_resp.status_code in {400, 422}
+
+
+def test_malformed_identifier_rejected():
+    """Verify malformed task_id and proposal_id are rejected with 400 Bad Request."""
+    # Proposal ID containing illegal characters
+    resp1 = client.post(
+        "/api/v1/proposals/invalid%20proposal%20id/evaluate",
+        json={
+            "task_id": "task-valid-123",
+            "task_description": "Task",
+            "proposed_fix": "Fix",
+            "test_file": "tests/test_migration_fixture.py",
+        },
+    )
+    assert resp1.status_code == 400
+
+    # Task ID with illegal characters
+    resp2 = client.post(
+        f"/api/v1/proposals/proposal-{uuid4().hex}/evaluate",
+        json={
+            "task_id": "invalid task id with spaces",
+            "task_description": "Task",
+            "proposed_fix": "Fix",
+            "test_file": "tests/test_migration_fixture.py",
+        },
+    )
+    assert resp2.status_code == 400
+
+
+def test_gemini_rate_limit_429():
+    """Verify Gemini quota/rate limits return 429 Too Many Requests with Retry-After."""
+    from google.genai import errors as genai_errors
+
+    rate_err = genai_errors.ClientError(
+        429,
+        {"error": {"code": 429, "message": "Resource has been exhausted (e.g. check quota)."}}
+    )
+    service = get_orchestration_service()
+    with patch.object(service.orchestrator.solver, "propose", side_effect=rate_err):
+        response = client.post(
+            "/api/v1/proposals",
+            json={
+                "task_description": "Deadlock during migration",
+                "category": "database_migration",
+                "limit": 3,
+            },
+        )
+        assert response.status_code == 429
+        assert "Retry-After" in response.headers
+        assert response.headers["Retry-After"] == "5"
+
+
+def test_gemini_server_error_503():
+    """Verify Gemini server-side errors return 503 Service Unavailable with Retry-After."""
+    from google.genai import errors as genai_errors
+
+    server_err = genai_errors.ServerError(
+        503,
+        {"error": {"code": 503, "message": "The model is temporarily overloaded."}}
+    )
+    service = get_orchestration_service()
+    with patch.object(service.orchestrator.solver, "propose", side_effect=server_err):
+        response = client.post(
+            "/api/v1/proposals",
+            json={
+                "task_description": "Deadlock during migration",
+                "category": "database_migration",
+                "limit": 3,
+            },
+        )
+        assert response.status_code == 503
+        assert "Retry-After" in response.headers
+        assert response.headers["Retry-After"] == "5"
+
+
+def test_falkordb_connection_failure_502():
+    """Verify FalkorDB connection error surfaces clean 502 Bad Gateway response."""
+    import redis.exceptions
+
+    conn_err = redis.exceptions.ConnectionError("Connection refused to FalkorDB on port 6379")
+    service = get_orchestration_service()
+    with patch.object(service.orchestrator.investigator, "investigate", side_effect=conn_err):
+        response = client.post(
+            "/api/v1/proposals",
+            json={
+                "task_description": "Deadlock during migration",
+                "category": "database_migration",
+                "limit": 3,
+            },
+        )
+        assert response.status_code == 502
+        assert "FalkorDB is unreachable" in response.json()["detail"]
+
+
+def test_test_runner_timeout_yields_unverified():
+    """Verify a timed-out test run safely reports UNVERIFIED and does not claim success."""
+    from app.ai.verifier import TestExecutionResult
+
+    proposal_id = f"proposal-{uuid4().hex}"
+    task_id = f"task-{uuid4().hex}"
+
+    timed_out_execution = TestExecutionResult(
+        command="python -m pytest tests/test_migration_fixture.py -q",
+        exit_code=None,
+        tests_executed=False,
+        stderr="Test run timed out after 60 seconds.",
+        test_file="tests/test_migration_fixture.py",
+    )
+
+    service = get_orchestration_service()
+    with patch.object(service.orchestrator.test_runner, "run", return_value=timed_out_execution):
+        response = client.post(
+            f"/api/v1/proposals/{proposal_id}/evaluate",
+            json={
+                "task_id": task_id,
+                "task_description": "Deadlock migration",
+                "proposed_fix": "Fix",
+                "test_file": "tests/test_migration_fixture.py",
+                "is_relevant": True,
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["verification_status"] == "UNVERIFIED"
+        assert data["tests_executed"] is False
+        assert data["exit_code"] is None
+        assert "timed out" in data["evidence"].lower()
+
+
+def test_failed_verification_persisted_with_lesson():
+    """Verify a VERIFIED_FAILURE can be persisted with lesson and creates a FailureRecord."""
+    proposal_id = f"proposal-{uuid4().hex}"
+    task_id = f"task-{uuid4().hex}"
+
+    # 1. Evaluate with failing fixture
+    eval_resp = client.post(
+        f"/api/v1/proposals/{proposal_id}/evaluate",
+        json={
+            "task_id": task_id,
+            "task_description": "Failing migration test",
+            "proposed_fix": "Blocking index build",
+            "test_file": "tests/test_migration_failure_fixture.py",
+            "is_relevant": True,
+        },
+    )
+    assert eval_resp.status_code == 200
+    assert eval_resp.json()["verification_status"] == "VERIFIED_FAILURE"
+
+    # 2. Persist with lesson explaining the negative outcome
+    lesson_text = "Blocking index creation creates exclusive table locks that lead to deadlocks."
+    persist_resp = client.post(
+        f"/api/v1/proposals/{proposal_id}/persist",
+        json={
+            "task_id": task_id,
+            "task_description": "Failing migration test",
+            "problem_title": "Blocking index failure",
+            "category": "database_migration",
+            "lesson_content": lesson_text,
+        },
+    )
+    assert persist_resp.status_code == 200
+    data = persist_resp.json()
+    assert data["verification_status"] == "VERIFIED_FAILURE"
+    assert data["lesson_saved"] is True
+    assert data["lesson_id"] is not None
+    assert data["lesson_id"].startswith("lesson-")
+
+
+def test_repeated_persistence_idempotency():
+    """Verify repeated persistence requests return the exact same outcome idempotently."""
+    proposal_id = f"proposal-{uuid4().hex}"
+    task_id = f"task-{uuid4().hex}"
+
+    # 1. Evaluate
+    eval_resp = client.post(
+        f"/api/v1/proposals/{proposal_id}/evaluate",
+        json={
+            "task_id": task_id,
+            "task_description": "Idempotency migration test",
+            "proposed_fix": "Concurrent index build",
+            "test_file": "tests/test_migration_fixture.py",
+            "is_relevant": True,
+        },
+    )
+    assert eval_resp.status_code == 200
+
+    payload = {
+        "task_id": task_id,
+        "task_description": "Idempotency migration test",
+        "problem_title": "Idempotency problem",
+        "category": "database_migration",
+        "lesson_content": "Always build concurrent indexes on active tables.",
+    }
+
+    # 2. First persist call
+    resp1 = client.post(f"/api/v1/proposals/{proposal_id}/persist", json=payload)
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+
+    # 3. Second persist call
+    resp2 = client.post(f"/api/v1/proposals/{proposal_id}/persist", json=payload)
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+
+    # Exactly identical IDs and status
+    assert data1["lesson_id"] == data2["lesson_id"]
+    assert data1["outcome_id"] == data2["outcome_id"]
+    assert data1["verification_status"] == data2["verification_status"]
+
+
+def test_query_cached_proposal_evaluation_and_persisted():
+    """Verify GET endpoints retrieve cached records and return 404 for unknown IDs."""
+    fake_proposal = SolverResponse(
+        proposal_id="proposal-cached-001",
+        diagnosis="Diagnosis",
+        proposed_fix="Fix",
+        reasoning="Reasoning",
+        tests_to_run=["tests/test_migration_fixture.py"],
+        memory_ids_used=[],
+        risks=[],
+    )
+
+    service = get_orchestration_service()
+    with patch.object(service.orchestrator.solver, "propose", return_value=fake_proposal):
+        create_resp = client.post(
+            "/api/v1/proposals",
+            json={"task_description": "Cached proposal test", "limit": 2},
+        )
+        assert create_resp.status_code == 200
+        proposal_id = create_resp.json()["proposal_id"]
+        task_id = create_resp.json()["task_id"]
+
+    # 1. Query proposal details
+    get_prop_resp = client.get(f"/api/v1/proposals/{proposal_id}")
+    assert get_prop_resp.status_code == 200
+    assert get_prop_resp.json()["proposal_id"] == proposal_id
+
+    # 2. Evaluate
+    client.post(
+        f"/api/v1/proposals/{proposal_id}/evaluate",
+        json={
+            "task_id": task_id,
+            "task_description": "Cached proposal test",
+            "proposed_fix": "Fix",
+            "test_file": "tests/test_migration_fixture.py",
+            "is_relevant": True,
+        },
+    )
+
+    # 3. Query evaluation
+    get_eval_resp = client.get(f"/api/v1/proposals/{proposal_id}/evaluation")
+    assert get_eval_resp.status_code == 200
+    assert get_eval_resp.json()["proposal_id"] == proposal_id
+
+    # 4. Persist
+    client.post(
+        f"/api/v1/proposals/{proposal_id}/persist",
+        json={
+            "task_id": task_id,
+            "task_description": "Cached proposal test",
+            "problem_title": "Cached problem",
+            "category": "testing",
+            "lesson_content": "A cached lesson.",
+        },
+    )
+
+    # 5. Query persisted record
+    get_persisted_resp = client.get(f"/api/v1/proposals/{proposal_id}/persisted")
+    assert get_persisted_resp.status_code == 200
+    assert get_persisted_resp.json()["proposal_id"] == proposal_id
+
+    # 6. Unknown IDs return 404
+    unknown_id = f"proposal-{uuid4().hex}"
+    assert client.get(f"/api/v1/proposals/{unknown_id}").status_code == 404
+    assert client.get(f"/api/v1/proposals/{unknown_id}/evaluation").status_code == 404
+    assert client.get(f"/api/v1/proposals/{unknown_id}/persisted").status_code == 404

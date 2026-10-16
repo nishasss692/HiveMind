@@ -50,7 +50,13 @@ def create_proposal(
     ),
 )
 def evaluate_proposal(
-    proposal_id: str = Path(..., description="Unique proposal identifier"),
+    proposal_id: str = Path(
+        ...,
+        min_length=3,
+        max_length=128,
+        pattern=r"^[a-zA-Z0-9_\-]+$",
+        description="Unique proposal identifier",
+    ),
     request: ProposalEvaluateRequest = ...,
     service: OrchestrationService = Depends(get_orchestration_service),
 ) -> dict[str, Any]:
@@ -77,7 +83,13 @@ def evaluate_proposal(
     ),
 )
 def persist_proposal(
-    proposal_id: str = Path(..., description="Unique proposal identifier"),
+    proposal_id: str = Path(
+        ...,
+        min_length=3,
+        max_length=128,
+        pattern=r"^[a-zA-Z0-9_\-]+$",
+        description="Unique proposal identifier",
+    ),
     request: ProposalPersistRequest = ...,
     service: OrchestrationService = Depends(get_orchestration_service),
 ) -> dict[str, Any]:
@@ -98,7 +110,13 @@ def persist_proposal(
     description="Retrieve cached details for a generated proposal by ID.",
 )
 def get_proposal_details(
-    proposal_id: str = Path(..., description="Unique proposal identifier"),
+    proposal_id: str = Path(
+        ...,
+        min_length=3,
+        max_length=128,
+        pattern=r"^[a-zA-Z0-9_\-]+$",
+        description="Unique proposal identifier",
+    ),
     service: OrchestrationService = Depends(get_orchestration_service),
 ) -> dict[str, Any]:
     proposal = service.get_proposal(proposal_id)
@@ -116,7 +134,13 @@ def get_proposal_details(
     description="Retrieve cached evaluation and test execution results for a proposal by ID.",
 )
 def get_proposal_evaluation(
-    proposal_id: str = Path(..., description="Unique proposal identifier"),
+    proposal_id: str = Path(
+        ...,
+        min_length=3,
+        max_length=128,
+        pattern=r"^[a-zA-Z0-9_\-]+$",
+        description="Unique proposal identifier",
+    ),
     service: OrchestrationService = Depends(get_orchestration_service),
 ) -> dict[str, Any]:
     evaluation = service.get_evaluation(proposal_id)
@@ -126,3 +150,27 @@ def get_proposal_evaluation(
             detail=f"Evaluation for proposal '{proposal_id}' not found.",
         )
     return evaluation
+
+
+@router.get(
+    "/{proposal_id}/persisted",
+    summary="Get cached proposal persistence record",
+    description="Retrieve cached persistence record for a proposal by ID.",
+)
+def get_proposal_persisted(
+    proposal_id: str = Path(
+        ...,
+        min_length=3,
+        max_length=128,
+        pattern=r"^[a-zA-Z0-9_\-]+$",
+        description="Unique proposal identifier",
+    ),
+    service: OrchestrationService = Depends(get_orchestration_service),
+) -> dict[str, Any]:
+    persisted = service.get_persisted(proposal_id)
+    if not persisted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Persisted record for proposal '{proposal_id}' not found.",
+        )
+    return persisted

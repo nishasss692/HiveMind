@@ -30,6 +30,7 @@ class OrchestrationService:
 
         self._proposals: dict[str, dict[str, Any]] = {}
         self._evaluations: dict[str, dict[str, Any]] = {}
+        self._persisted: dict[str, dict[str, Any]] = {}
 
     def propose(
         self,
@@ -124,6 +125,13 @@ class OrchestrationService:
         test_execution = eval_result["test_execution"]
         test_spec = eval_result.get("test_specification")
 
+        # Idempotency check: if this proposal_id was already successfully persisted
+        # with identical parameters, return the existing persisted record to prevent duplicates.
+        if proposal_id in self._persisted:
+            existing = self._persisted[proposal_id]
+            if existing.get("task_id") == task_id:
+                return existing
+
         record = self.orchestrator.record_verification(
             task_description=task_description,
             problem_title=problem_title,
@@ -136,7 +144,7 @@ class OrchestrationService:
             proposal_id=proposal_id,
         )
 
-        return {
+        persisted_data = {
             "task_id": record["task_id"],
             "proposal_id": record["proposal_id"],
             "verification_status": record["verification_status"],
@@ -145,12 +153,17 @@ class OrchestrationService:
             "outcome_id": record["outcome_id"],
             "verification_evidence": record.get("verification_evidence"),
         }
+        self._persisted[proposal_id] = persisted_data
+        return persisted_data
 
     def get_evaluation(self, proposal_id: str) -> dict[str, Any] | None:
         return self._evaluations.get(proposal_id)
 
     def get_proposal(self, proposal_id: str) -> dict[str, Any] | None:
         return self._proposals.get(proposal_id)
+
+    def get_persisted(self, proposal_id: str) -> dict[str, Any] | None:
+        return self._persisted.get(proposal_id)
 
     def check_health(self) -> dict[str, Any]:
         """Ping FalkorDB to determine database readiness."""

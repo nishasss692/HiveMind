@@ -177,3 +177,81 @@ HiveMind enforces strict verification boundaries to prevent false claims:
    - *Safety Guarantee*: All statements use idempotent `MERGE` clauses keyed on unique entity IDs. Retrying a write safely completes any missing relations without data corruption or duplicate nodes.
    - *Visibility Guarantee*: Retrieval queries require an inner `MATCH (l:Lesson)-[:SUPPORTED_BY]->(o:Outcome)` with `o.status IN ['VERIFIED_SUCCESS', 'VERIFIED_FAILURE']`. An incomplete write can never expose an unverified or evidence-less lesson in retrieval.
    - *Mitigation for Backend*: Execute writes sequentially per task/proposal rather than dispatching parallel simultaneous writes to the same proposal ID.
+
+---
+
+## 7. Backend REST API Service (`backend/`)
+
+The FastAPI service exposes HiveMind's memory and verification pipeline via clean REST endpoints.
+
+### Starting the Backend Server
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Interactive API Documentation (Swagger & ReDoc)
+- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+- **OpenAPI Schema**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
+
+### Available Endpoints
+- `GET /health` & `GET /api/v1/health`: Service & FalkorDB health check.
+- `POST /api/v1/proposals`: Grounded solution generation (always returns `UNVERIFIED`).
+- `POST /api/v1/proposals/{proposal_id}/evaluate`: Sandboxed pytest execution (`tests/`) & empirical verification.
+- `POST /api/v1/proposals/{proposal_id}/persist`: Gated FalkorDB persistence (lessons saved only for verified outcomes).
+- `GET /api/v1/proposals/{proposal_id}`: Retrieve cached proposal details.
+- `GET /api/v1/proposals/{proposal_id}/evaluation`: Retrieve cached evaluation and test execution record.
+- `GET /api/v1/proposals/{proposal_id}/persisted`: Retrieve cached persistence audit record.
+
+---
+
+## 8. Real PostgreSQL Integration Testing
+
+> [!NOTE]
+> **Architectural Separation**: FalkorDB is HiveMind's native graph-memory engine. PostgreSQL is an isolated relational database target used strictly to test and verify database migration proposals (such as non-blocking concurrent index creation).
+
+### Starting the Isolated Test PostgreSQL Container
+To run real PostgreSQL migration integration tests without affecting production or local databases:
+```powershell
+docker run -d --name hivemind-postgres-test -p 5433:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=hivemind_test postgres:16-alpine
+```
+
+### Running PostgreSQL Integration Tests
+```powershell
+# Run the 5 PostgreSQL concurrent migration scenarios
+.\.venv\Scripts\python.exe -m pytest tests/test_postgres_migration.py -v
+```
+
+These integration tests empirically verify:
+1. Creating test tables and building indexes concurrently in PostgreSQL.
+2. Confirming that `CREATE INDEX CONCURRENTLY` cannot run inside an explicit transaction block (`ActiveSqlTransaction`).
+3. Running concurrent background read and write traffic while an index is being built without deadlocks or table-exclusive locks.
+4. Validating the resulting index status using PostgreSQL system catalogs (`pg_index.indisvalid = True`, `pg_index.indisready = True`).
+5. Handling failures/interrupted concurrent builds (detecting `indisvalid = False` in the catalog and performing non-blocking cleanup via `DROP INDEX CONCURRENTLY IF EXISTS`).
+
+*If PostgreSQL is unavailable, these tests are cleanly reported as `SKIPPED` with instructions rather than falsely reporting success.*
+
+---
+
+## 9. Running Test Suites
+
+HiveMind maintains strict test isolation:
+
+```powershell
+# 1. Run complete automated regression suite (44 tests, offline, 0 cost)
+.\.venv\Scripts\python.exe -m pytest -v
+
+# 2. Run standalone 5-stage cross-task learning loop demo
+.\.venv\Scripts\python.exe app/ai/demo_learning_loop.py
+
+# 3. Run full end-to-end learning test
+.\.venv\Scripts\python.exe app/ai/test_end_to_end_learning.py
+
+# 4. Optional: Live Gemini Provider Tests (Requires valid GEMINI_API_KEY in .env)
+.\.venv\Scripts\python.exe -m app.ai.test_gemini
+.\.venv\Scripts\python.exe -m app.ai.test_propose_workflow
+```
+
+### Warnings & Upstream Dependencies
+- **Starlette HTTP 422**: Fully updated to `HTTP_422_UNPROCESSABLE_CONTENT` (RFC 9110).
+- **Starlette TestClient Warning**: Starlette 1.8 emits an informational deprecation warning suggesting `httpx2` for its test client while running tests using `httpx`. This does not affect runtime application correctness or test validity.

@@ -77,7 +77,9 @@ class ProposalResponse(BaseModel):
 class ProposalEvaluateRequest(BaseModel):
     task_id: str = Field(
         ...,
-        min_length=1,
+        min_length=3,
+        max_length=128,
+        pattern=r"^[a-zA-Z0-9_\-]+$",
         description="Task ID associated with the proposal.",
     )
     task_description: str = Field(
@@ -147,7 +149,9 @@ class ProposalEvaluateResponse(BaseModel):
 class ProposalPersistRequest(BaseModel):
     task_id: str = Field(
         ...,
-        min_length=1,
+        min_length=3,
+        max_length=128,
+        pattern=r"^[a-zA-Z0-9_\-]+$",
         description="Task ID associated with the proposal.",
     )
     task_description: str = Field(
