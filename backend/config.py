@@ -22,6 +22,8 @@ class Settings:
     falkordb_host: str = "localhost"
     falkordb_port: int = 6379
     falkordb_graph_name: str = "hivemind"
+    lifecycle_db_path: str = str(PROJECT_ROOT / "data" / "lifecycle.db")
+    cors_allowed_origins: list[str] | None = None
     api_v1_prefix: str = "/api/v1"
     project_name: str = "HiveMind API"
     version: str = "1.0.0"
@@ -41,6 +43,24 @@ class Settings:
         self.falkordb_graph_name = os.getenv(
             "FALKORDB_GRAPH_NAME", self.falkordb_graph_name
         )
+        self.lifecycle_db_path = os.getenv(
+            "LIFECYCLE_DB_PATH", self.lifecycle_db_path
+        )
+
+        cors_env = os.getenv("CORS_ALLOWED_ORIGINS")
+        if cors_env:
+            self.cors_allowed_origins = [
+                origin.strip() for origin in cors_env.split(",") if origin.strip()
+            ]
+        elif self.cors_allowed_origins is None:
+            self.cors_allowed_origins = [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:8000",
+                "http://127.0.0.1:8000",
+            ]
 
 
 _settings: Settings | None = None

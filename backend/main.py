@@ -30,10 +30,10 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-# Configure CORS
+# Configure CORS (Objective 8: Restrict allowed origins appropriately for development setup)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,6 +61,20 @@ async def value_error_handler(request: Request, exc: ValueError):
     """Handle ValueErrors according to specific integration rules."""
     msg = str(exc)
     msg_lower = msg.lower()
+
+    # Rule: Not found -> 404 Not Found
+    if "not found" in msg_lower:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": msg},
+        )
+
+    # Rule: Conflicting parameters on repeated requests -> 409 Conflict
+    if "conflict" in msg_lower:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": msg},
+        )
 
     # Rule: Test file outside tests/ directory -> 403 Forbidden
     if "tests directory" in msg_lower or "tests/" in msg_lower and "outside" in msg_lower:

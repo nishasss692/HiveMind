@@ -1,0 +1,28 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: hivemind-falkordb
+    ports:
+      - "6379:6379"
+      - "3000:3000"
+    volumes:
+      - hivemind-falkordb-data:/var/lib/falkordb/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hivemind-postgres-test
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: hivemind_test
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  hivemind-falkordb-data:
+    external: true
+  postgres_data:

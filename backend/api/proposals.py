@@ -130,6 +130,7 @@ def get_proposal_details(
 
 @router.get(
     "/{proposal_id}/evaluation",
+    response_model=ProposalEvaluateResponse,
     summary="Get cached proposal evaluation",
     description="Retrieve cached evaluation and test execution results for a proposal by ID.",
 )
@@ -149,7 +150,35 @@ def get_proposal_evaluation(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Evaluation for proposal '{proposal_id}' not found.",
         )
-    return evaluation
+
+    test_exec = evaluation.get("test_execution")
+    if hasattr(test_exec, "tests_executed"):
+        tests_executed = test_exec.tests_executed
+        exit_code = test_exec.exit_code
+        stdout = test_exec.stdout
+        stderr = test_exec.stderr
+    elif isinstance(test_exec, dict):
+        tests_executed = test_exec.get("tests_executed", False)
+        exit_code = test_exec.get("exit_code")
+        stdout = test_exec.get("stdout", "")
+        stderr = test_exec.get("stderr", "")
+    else:
+        tests_executed = evaluation.get("tests_executed", False)
+        exit_code = evaluation.get("exit_code")
+        stdout = evaluation.get("stdout", "")
+        stderr = evaluation.get("stderr", "")
+
+    return {
+        "task_id": evaluation["task_id"],
+        "proposal_id": evaluation["proposal_id"],
+        "verification_status": evaluation["verification_status"],
+        "tests_executed": tests_executed,
+        "exit_code": exit_code,
+        "evidence": evaluation["evidence"],
+        "selected_test_file": evaluation.get("selected_test_file", ""),
+        "stdout": stdout,
+        "stderr": stderr,
+    }
 
 
 @router.get(

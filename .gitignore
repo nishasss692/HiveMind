@@ -45,3 +45,9 @@ htmlcov/
 node_modules/
 .next/
 out/
+
+# Local databases and lifecycle data
+data/*.db
+data/*.db-wal
+data/*.db-shm
+*.db

@@ -4,17 +4,19 @@ from typing import Any
 from app.ai.orchestrator import HiveMindOrchestrator
 from app.memory.graph_repository import GraphMemoryRepository
 from backend.config import get_settings
+from backend.services.lifecycle_store import LifecycleStore
 
 logger = logging.getLogger(__name__)
 
 
 class OrchestrationService:
-    """Service wrapping HiveMindOrchestrator and maintaining in-memory evaluation records."""
+    """Service wrapping HiveMindOrchestrator and maintaining persisted lifecycle records."""
 
     def __init__(
         self,
         orchestrator: HiveMindOrchestrator | None = None,
         repository: GraphMemoryRepository | None = None,
+        lifecycle_store: LifecycleStore | None = None,
     ):
         settings = get_settings()
         if orchestrator is not None:
@@ -28,9 +30,7 @@ class OrchestrationService:
             )
             self.orchestrator = HiveMindOrchestrator(repository=self.repository)
 
-        self._proposals: dict[str, dict[str, Any]] = {}
-        self._evaluations: dict[str, dict[str, Any]] = {}
-        self._persisted: dict[str, dict[str, Any]] = {}
+        self.store = lifecycle_store or LifecycleStore(settings.lifecycle_db_path)
 
     def propose(
         self,
@@ -46,10 +46,9 @@ class OrchestrationService:
         )
 
         proposal_id = result["proposal_id"]
-        self._proposals[proposal_id] = result
-
         proposal_obj = result.get("proposal")
-        return {
+
+        formatted_proposal = {
             "task_id": result["task_id"],
             "proposal_id": proposal_id,
             "status": result.get("verification_status", "UNVERIFIED"),
@@ -66,6 +65,16 @@ class OrchestrationService:
             "proposal": proposal_obj,
         }
 
+        self.store.save_proposal(
+            proposal_id=proposal_id,
+            task_id=result["task_id"],
+            task_description=result["task_description"],
+            proposed_fix=result["proposed_fix"],
+            data=formatted_proposal,
+        )
+
+        return formatted_proposal
+
     def evaluate(
         self,
         task_id: str,
@@ -76,19 +85,77 @@ class OrchestrationService:
         is_relevant: bool = True,
         test_description: str = "",
     ) -> dict[str, Any]:
-        """Evaluate a proposal using an explicit test file."""
+        """Evaluate a proposal using an explicit test file with strict canonical validation."""
+        # Objective 1: Validate that evaluation references a real canonical proposal
+        canonical = self.store.get_proposal(proposal_id)
+        if canonical is None:
+            raise ValueError(f"Proposal '{proposal_id}' not found.")
+
+        # Objective 1 & 4: Validate task ID consistency
+        if task_id != canonical["task_id"]:
+            raise ValueError(
+                f"Task ID mismatch: provided '{task_id}' does not match canonical proposal task ID '{canonical['task_id']}'."
+            )
+
+        # Objective 2: Prevent client-supplied values from replacing canonical server-side values
+        if task_description != canonical["task_description"]:
+            raise ValueError(
+                "Task description does not match canonical proposal task description."
+            )
+
+        if proposed_fix != canonical["proposed_fix"]:
+            raise ValueError("Proposed fix does not match canonical proposal fix.")
+
+        # Objective 6: Idempotency check for repeated evaluation
+        existing_eval = self.store.get_evaluation(proposal_id)
+        if existing_eval is not None:
+            existing_params = self.store.get_evaluation_params(proposal_id)
+            if existing_params and (
+                existing_params.get("task_id") == task_id
+                and existing_params.get("test_file") == test_file
+                and existing_params.get("is_relevant") == is_relevant
+                and existing_params.get("test_description") == test_description
+                and existing_params.get("proposed_fix") == proposed_fix
+                and existing_params.get("task_description") == task_description
+            ):
+                test_exec = existing_eval["test_execution"]
+                return {
+                    "task_id": existing_eval["task_id"],
+                    "proposal_id": existing_eval["proposal_id"],
+                    "verification_status": existing_eval["verification_status"],
+                    "tests_executed": test_exec.tests_executed,
+                    "exit_code": test_exec.exit_code,
+                    "evidence": existing_eval["evidence"],
+                    "selected_test_file": existing_eval["selected_test_file"],
+                    "stdout": test_exec.stdout,
+                    "stderr": test_exec.stderr,
+                }
+            else:
+                raise ValueError(
+                    f"Conflicting evaluation request: proposal '{proposal_id}' has already been evaluated with different parameters."
+                )
+
         eval_result = self.orchestrator.evaluate_proposal(
-            task_id=task_id,
+            task_id=canonical["task_id"],
             proposal_id=proposal_id,
-            task_description=task_description,
-            proposed_fix=proposed_fix,
+            task_description=canonical["task_description"],
+            proposed_fix=canonical["proposed_fix"],
             test_file=test_file,
             is_relevant=is_relevant,
             test_description=test_description,
         )
 
-        # Store evaluation result for subsequent persistence
-        self._evaluations[proposal_id] = eval_result
+        self.store.save_evaluation(
+            proposal_id=proposal_id,
+            task_id=canonical["task_id"],
+            task_description=canonical["task_description"],
+            proposed_fix=canonical["proposed_fix"],
+            test_file=test_file,
+            is_relevant=is_relevant,
+            test_description=test_description,
+            verification_status=eval_result["verification_status"],
+            data=eval_result,
+        )
 
         test_exec = eval_result["test_execution"]
         return {
@@ -113,34 +180,72 @@ class OrchestrationService:
         lesson_content: str | None = None,
         proposed_fix: str | None = None,
     ) -> dict[str, Any]:
-        """Persist verification evidence and lessons into FalkorDB graph memory."""
-        eval_result = self._evaluations.get(proposal_id)
+        """Persist verification evidence and lessons into FalkorDB graph memory with strict validation."""
+        # Objective 1: Validate proposal exists
+        canonical = self.store.get_proposal(proposal_id)
+        if canonical is None:
+            raise ValueError(f"Proposal '{proposal_id}' not found.")
+
+        # Validate proposal was evaluated
+        eval_result = self.store.get_evaluation(proposal_id)
         if eval_result is None:
             raise ValueError(
                 f"Proposal '{proposal_id}' has not been evaluated yet. "
                 f"Proposals must undergo test evaluation before verification can be persisted."
             )
 
-        fix = proposed_fix or eval_result.get("proposed_fix")
+        # Objective 1 & 4: Validate task ID consistency
+        if task_id != canonical["task_id"] or task_id != eval_result["task_id"]:
+            raise ValueError(
+                f"Task ID mismatch: provided '{task_id}' does not match canonical proposal task ID '{canonical['task_id']}'."
+            )
+
+        # Objective 2: Prevent client-supplied task description from replacing canonical value
+        if task_description != canonical["task_description"]:
+            raise ValueError(
+                "Task description does not match canonical proposal task description."
+            )
+
+        # Objective 3: Prevent persistence from associating a different proposed fix with test evidence
+        if proposed_fix is not None and proposed_fix != canonical["proposed_fix"]:
+            raise ValueError(
+                "Proposed fix in persistence request does not match the evaluated proposal fix."
+            )
+
+        # Objective 6: Idempotency check with conflict detection
+        existing_persisted = self.store.get_persisted(proposal_id)
+        if existing_persisted is not None:
+            existing_params = self.store.get_persisted_params(proposal_id)
+            if existing_params and (
+                existing_params.get("task_id") == task_id
+                and existing_params.get("task_description") == task_description
+                and existing_params.get("problem_title") == problem_title
+                and existing_params.get("category") == category
+                and existing_params.get("lesson_content") == lesson_content
+                and (
+                    proposed_fix is None
+                    or existing_params.get("proposed_fix") == proposed_fix
+                )
+            ):
+                return existing_persisted
+            else:
+                raise ValueError(
+                    f"Conflicting persistence request: proposal '{proposal_id}' has already been persisted with different parameters."
+                )
+
+        fix = canonical["proposed_fix"]
         test_execution = eval_result["test_execution"]
         test_spec = eval_result.get("test_specification")
 
-        # Idempotency check: if this proposal_id was already successfully persisted
-        # with identical parameters, return the existing persisted record to prevent duplicates.
-        if proposal_id in self._persisted:
-            existing = self._persisted[proposal_id]
-            if existing.get("task_id") == task_id:
-                return existing
-
         record = self.orchestrator.record_verification(
-            task_description=task_description,
+            task_description=canonical["task_description"],
             problem_title=problem_title,
             category=category,
             proposal=fix,
             test_result=test_execution,
             lesson_content=lesson_content,
             test_spec=test_spec,
-            task_id=task_id,
+            task_id=canonical["task_id"],
             proposal_id=proposal_id,
         )
 
@@ -153,17 +258,29 @@ class OrchestrationService:
             "outcome_id": record["outcome_id"],
             "verification_evidence": record.get("verification_evidence"),
         }
-        self._persisted[proposal_id] = persisted_data
+
+        self.store.save_persisted(
+            proposal_id=proposal_id,
+            task_id=canonical["task_id"],
+            task_description=canonical["task_description"],
+            problem_title=problem_title,
+            category=category,
+            lesson_content=lesson_content,
+            proposed_fix=fix,
+            verification_status=record["verification_status"],
+            data=persisted_data,
+        )
+
         return persisted_data
 
     def get_evaluation(self, proposal_id: str) -> dict[str, Any] | None:
-        return self._evaluations.get(proposal_id)
+        return self.store.get_evaluation(proposal_id)
 
     def get_proposal(self, proposal_id: str) -> dict[str, Any] | None:
-        return self._proposals.get(proposal_id)
+        return self.store.get_proposal(proposal_id)
 
     def get_persisted(self, proposal_id: str) -> dict[str, Any] | None:
-        return self._persisted.get(proposal_id)
+        return self.store.get_persisted(proposal_id)
 
     def check_health(self) -> dict[str, Any]:
         """Ping FalkorDB to determine database readiness."""
