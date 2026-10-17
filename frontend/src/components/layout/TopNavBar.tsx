@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Search,
-  Zap,
   Play,
   Share2,
   GitCommit,
@@ -9,8 +8,6 @@ import {
   AlertOctagon,
   Sparkles,
   FileCode2,
-  Database,
-  ExternalLink,
 } from 'lucide-react';
 import type { HealthResponse } from '../../types/api';
 
@@ -30,10 +27,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   onSelectTab,
   onOpenNewProposal,
   onOpenSearch,
-  health,
-  isHealthLoading,
 }) => {
-  const isDbConnected = health?.database_connected ?? false;
 
   return (
     <header className="sticky top-0 z-40 w-full bg-[#FFFFFF]/90 backdrop-blur-md border-b border-[#EADECE]">
@@ -45,7 +39,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
             className="flex items-center gap-2.5 focus:outline-none group text-left"
           >
             {/* Distinctive Neural-Branching HiveMind Mark */}
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] flex items-center justify-center text-white shadow-sm transition-transform group-hover:scale-105">
+            <div className="w-8 h-8 rounded-lg bg-[#1E3A8A] flex items-center justify-center text-white shadow-sm transition-transform group-hover:scale-105">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -168,51 +162,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
             <FileCode2 className="w-3.5 h-3.5" />
             <span>Ledger</span>
           </button>
-
-          {/* API Docs */}
-          <a
-            href="http://127.0.0.1:8000/docs"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden xl:flex items-center gap-1 text-[#64748B] hover:text-[#1E3A8A] transition-colors py-4 text-xs sm:text-sm"
-          >
-            <span>API Docs</span>
-            <ExternalLink className="w-3 h-3 text-[#64748B]" />
-          </a>
         </nav>
 
-        {/* Right: Status Indicators & Actions */}
+        {/* Right: Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* FalkorDB status indicator */}
-          <div
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FFFFFF] border border-[#EADECE] shadow-xs text-xs font-mono"
-            title={isDbConnected ? 'FalkorDB is connected' : 'FalkorDB is unreachable'}
-          >
-            <span className="relative flex h-2 w-2">
-              {isDbConnected && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2563EB] opacity-75"></span>
-              )}
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  isDbConnected ? 'bg-[#059669]' : 'bg-[#E11D48]'
-                }`}
-              ></span>
-            </span>
-            <span className="text-[#475569] text-[11px] font-medium flex items-center gap-1">
-              <Database className="w-3 h-3 text-[#1E3A8A]" />
-              {isHealthLoading
-                ? 'Checking...'
-                : isDbConnected
-                ? 'FalkorDB: Online'
-                : 'FalkorDB: Degraded'}
-            </span>
-          </div>
-
-          {/* Gemini solver badge */}
-          <div className="hidden 2xl:flex items-center gap-1 px-2 py-0.5 rounded bg-[#F7F4EE] border border-[#EADECE] text-[11px] font-mono text-[#1E3A8A]">
-            <Zap className="w-3 h-3 text-[#2563EB]" />
-            <span>Gemini 3.8</span>
-          </div>
 
           {/* Primary Action Button */}
           <button

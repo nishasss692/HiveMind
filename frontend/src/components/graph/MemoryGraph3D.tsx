@@ -407,7 +407,7 @@ export const MemoryGraph3D: React.FC<MemoryGraph3DProps> = ({
       {/* Three.js Canvas Container */}
       <div
         ref={containerRef}
-        className="w-full h-[520px] rounded-2xl relative overflow-hidden block bg-gradient-to-b from-[#091124] via-[#0c1a3b] to-[#12234f] cursor-grab active:cursor-grabbing"
+        className="w-full h-[520px] rounded-2xl relative overflow-hidden block bg-[#0B132B] cursor-grab active:cursor-grabbing"
       >
         <canvas ref={canvasRef} className="w-full h-full block" />
 

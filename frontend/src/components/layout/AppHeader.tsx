@@ -2,11 +2,9 @@ import React from 'react';
 import {
   Search,
   Play,
-  Database,
   ChevronRight
 } from 'lucide-react';
 import type { NavRoute } from './Sidebar';
-import type { HealthResponse } from '../../types/api';
 
 interface AppHeaderProps {
   currentRoute: NavRoute;
@@ -14,8 +12,6 @@ interface AppHeaderProps {
   onToggleSidebar: () => void;
   onOpenSearch: () => void;
   onOpenNewRun: () => void;
-  health: HealthResponse | null;
-  isHealthLoading: boolean;
 }
 
 const ROUTE_LABELS: Record<NavRoute, { section: string; title: string }> = {
@@ -35,10 +31,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onToggleSidebar,
   onOpenSearch,
   onOpenNewRun,
-  health,
-  isHealthLoading,
 }) => {
-  const isDbConnected = health?.database_connected ?? false;
   const currentMeta = ROUTE_LABELS[currentRoute] || { section: 'HiveMind', title: 'Workbench' };
 
   return (
@@ -103,7 +96,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </button>
         </div>
 
-        {/* Right: Live Connection & Action CTA */}
+        {/* Right: Search & Action CTA */}
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
           {/* Mobile Search Icon */}
           <button
@@ -113,27 +106,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           >
             <Search className="w-4 h-4" />
           </button>
-
-          {/* FalkorDB Live Status */}
-          <div
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-[#EADECE] text-[11px] font-mono shadow-2xs"
-            title={isDbConnected ? 'FalkorDB is connected' : 'FalkorDB is degraded'}
-          >
-            <span className="relative flex h-2 w-2">
-              {isDbConnected && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2563EB] opacity-75" />
-              )}
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  isDbConnected ? 'bg-[#059669]' : 'bg-[#E11D48]'
-                }`}
-              />
-            </span>
-            <span className="text-slate-600 font-medium flex items-center gap-1">
-              <Database className="w-3 h-3 text-[#1E3A8A]" />
-              {isHealthLoading ? 'Checking...' : isDbConnected ? 'FalkorDB: Active' : 'FalkorDB: Offline'}
-            </span>
-          </div>
 
           {/* Primary Action Button */}
           <button

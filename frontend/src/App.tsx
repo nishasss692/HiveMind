@@ -351,8 +351,6 @@ export const App: React.FC = () => {
           onToggleSidebar={handleToggleSidebar}
           onOpenSearch={() => setIsCommandPaletteOpen(true)}
           onOpenNewRun={() => setIsWorkflowOpen(true)}
-          health={health}
-          isHealthLoading={isHealthLoading}
         />
 
         {/* Content Viewport */}
