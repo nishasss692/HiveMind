@@ -1,257 +1,244 @@
 # HiveMind — Evidence-Backed Collective Graph Memory for AI Coding Agents
 
-HiveMind enables AI coding agents to share lessons learned across tasks and incidents. Unlike traditional LLM coding assistants that forget past failures and re-invent broken approaches, HiveMind captures coding attempts, enforces rigorous empirical test verification, and stores evidence-backed lessons in **FalkorDB Graph Memory**.
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react)](https://react.dev)
+[![Three.js](https://img.shields.io/badge/Three.js-r160-black?style=flat-square&logo=three.js)](https://threejs.org)
+[![FalkorDB](https://img.shields.io/badge/FalkorDB-Graph_Memory-FF4500?style=flat-square)](https://falkordb.com)
+[![Gemini](https://img.shields.io/badge/Google_Gemini-3.8_Flash-4285F4?style=flat-square&logo=google)](https://ai.google.dev)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python)](https://python.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?style=flat-square&logo=typescript)](https://typescriptlang.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com)
+
+HiveMind is an AI-powered collective memory and verification system for coding agents. Unlike conventional LLM coding assistants that operate in an ephemeral loop—forgetting past failures, hallucinating fixes, and repeatedly falling into the same concurrency bugs—HiveMind enforces a complete, empirical learning lifecycle:
+
+$$\text{Retrieve Prior Experience} \longrightarrow \text{Diagnose \& Propose} \longrightarrow \text{Execute Sandbox Tests} \longrightarrow \text{Verify Evidence} \longrightarrow \text{Persist to Graph DAG} \longrightarrow \text{Reuse on Future Tasks}$$
+
+The system pairs a **FastAPI backend** and **FalkorDB Graph Database** with an interactive **React 3D Workbench** featuring an animated blue sidebar navigation, 3D WebGL memory topology, agent reasoning timeline, evidence provenance inspector, and cross-task memory transfer demonstration.
 
 ---
 
-## 1. Quick Start & Prerequisites
+## Architecture Overview
 
-### Prerequisites
-- **Python**: 3.11+ (tested on Python 3.13)
-- **FalkorDB**: Running on `localhost:6379`
-- **Virtual Environment**: `.venv` in repository root
+```mermaid
+flowchart TB
+    subgraph Frontend["HiveMind Frontend (React 18 + Vite 5 + Three.js)"]
+        UI_Nav["Collapsible Blue Sidebar<br/>(3-Bar Animated Hamburger)"]
+        UI_3D["3D Memory Graph Explorer<br/>(WebGL Neural Topology)"]
+        UI_Run["Learning Run Workspace<br/>(7-Stage Reasoning Timeline)"]
+        UI_Trust["Evidence & Trust Inspector<br/>(Causal Provenance Chain)"]
+        UI_Fail["Failure Intelligence<br/>(Anti-Pattern Negative Knowledge)"]
+        UI_Reuse["Memory Reuse Lab<br/>(Task A → Task B Transfer Demo)"]
+    end
 
-### Starting FalkorDB
-FalkorDB runs via Docker:
+    subgraph API["FastAPI REST Service (Port 8000)"]
+        Router["/api/v1/proposals Router"]
+        Endpoints["POST /proposals<br/>POST /proposals/{id}/evaluate<br/>POST /proposals/{id}/persist<br/>GET /proposals/{id}<br/>GET /health"]
+        LStore["Canonical Lifecycle Store<br/>(SQLite / PostgreSQL ACID)"]
+    end
+
+    subgraph Core["HiveMind Orchestration Engine"]
+        Orchestrator["HiveMindOrchestrator"]
+        Retriever["MemoryRetriever<br/>(Vector + Cypher Subgraph)"]
+        Solver["GeminiSolver<br/>(Gemini 3.8 Flash)"]
+        Runner["TestRunner<br/>(Sandboxed Pytest Subprocess)"]
+        Verifier["EvidenceVerifier<br/>(Exit Code & Output Analyzer)"]
+        Curator["MemoryCurator<br/>(ExperienceRecord Compiler)"]
+    end
+
+    subgraph Storage["Databases & Infrastructure"]
+        FalkorDB[("FalkorDB Graph Memory<br/>(Redis Protocol :6379)")]
+        DiskStorage[("Isolated Tests Sandbox<br/>(tests/*.py)")]
+    end
+
+    Frontend -->|Typed Axios / Fetch API| Router
+    Router --> Endpoints
+    Endpoints --> LStore
+    Endpoints --> Orchestrator
+
+    Orchestrator --> Retriever
+    Orchestrator --> Solver
+    Orchestrator --> Runner
+    Orchestrator --> Verifier
+    Orchestrator --> Curator
+
+    Retriever <-->|Cypher Queries| FalkorDB
+    Curator -->|Causal DAG Commits| FalkorDB
+    Runner <-->|Subprocess Execution| DiskStorage
+    Solver -->|Google GenAI API| GeminiCloud[("Google Gemini Cloud")]
+```
+
+---
+
+## FalkorDB Causal Knowledge Graph Schema
+
+In HiveMind, memory is not a flat list of text documents. It is a directed acyclic graph (DAG) of grounded experiences:
+
+```mermaid
+graph LR
+    Task["(:Task)<br/>Canonical Task Scoping"] -->|HAS_PROBLEM| Problem["(:Problem)<br/>Symptom & Domain Category"]
+    Problem -->|HAS_ATTEMPT| Attempt["(:Attempt)<br/>Generated Code Patch"]
+    Attempt -->|PRODUCED_OUTCOME| Outcome["(:Outcome)<br/>Status: VERIFIED_SUCCESS"]
+    Attempt -->|PRODUCED_FAILURE| Failure["(:Failure)<br/>Status: VERIFIED_FAILURE"]
+    
+    Lesson["(:Lesson)<br/>Reusable Engineering Insight"] -->|SUPPORTED_BY| Outcome
+    Lesson -->|APPLIES_TO| Problem
+    Failure -.->|SUPPORTS_LESSON| Lesson
+
+    classDef success fill:#ECFDF5,stroke:#059669,stroke-width:2px,color:#065F46;
+    classDef failure fill:#FFF1F2,stroke:#E11D48,stroke-width:2px,color:#9F1239;
+    classDef lesson fill:#EFF6FF,stroke:#2563EB,stroke-width:2px,color:#1E40AF;
+    classDef neutral fill:#F8FAFC,stroke:#64748B,stroke-width:1px,color:#334155;
+
+    class Outcome success;
+    class Failure failure;
+    class Lesson lesson;
+    class Task,Problem,Attempt neutral;
+```
+
+---
+
+## Distinctive Workbench Features
+
+### 1. Animated Blue Sidebar Navigation
+- **Deep Blue Palette**: Styled with `#1E3A8A` primary navy, `#172554` secondary slate-blue, and `#60A5FA` electric blue highlights.
+- **Animated 3-Bar Hamburger**: Smoothly transforms into a close `X` icon on toggle with micro-animations.
+- **Dual-Mode Desktop & Mobile**: Collapses into a sleek 72px icon rail on desktop with floating tooltips, and slides over with a backdrop overlay on mobile.
+- **Live Infrastructure Telemetry**: Real-time health indicators for FastAPI backend and FalkorDB connectivity.
+
+### 2. Collective Memory Graph Explorer (3D WebGL)
+- **Living Memory Topology**: Dark navy 3D canvas featuring a central glowing wireframe core, precessing orbital rings, floating typed nodes, and dynamic particle starfields.
+- **Evidence-Based Color Encoding**:
+  - <span style="color:#2563EB">●</span> **Blue**: Persistent Lessons & Knowledge Nodes
+  - <span style="color:#059669">●</span> **Green**: Verified Success Outcomes (`VERIFIED_SUCCESS`)
+  - <span style="color:#E11D48">●</span> **Red**: Verified Failures & Anti-Patterns (`VERIFIED_FAILURE`)
+  - <span style="color:#D97706">●</span> **Amber**: Unverified Proposals & Active Tasks (`UNVERIFIED`)
+- **HUD Controls**: Interactive drag, inertia damping, camera reset, pause/resume orbit, causal chain highlighting, and cluster filtering.
+
+### 3. Agent Reasoning Timeline (Learning Run Workspace)
+Tracks the complete autonomous lifecycle as a 7-stage connected timeline:
+1. **Investigation Scoping**: Canonical task parameterization and input boundaries.
+2. **Memory Retrieval**: FalkorDB vector and Cypher traversal for relevant historical lessons.
+3. **Solution Generation**: Gemini solver diagnostic analysis and patch synthesizer.
+4. **Sandboxed Fixture Binding**: Restricting test execution strictly within `tests/`.
+5. **Subprocess Pytest Execution**: Isolated pytest subprocess runner capturing stdout/stderr.
+6. **Empirical Verification Classification**: Status strictly determined by subprocess exit codes.
+7. **Graph Memory Persistence**: Inserting verified nodes into FalkorDB with grounded Cypher queries.
+
+### 4. Evidence & Trust Provenance Inspector
+Answers the core engineering question: **"Why should I trust this lesson?"**
+- Visualizes the unbroken 5-stage causal provenance chain: `Task → Proposal → Test Execution → Verification Outcome → Persisted Lesson`.
+- **Anti-Hallucination Integrity Contract**: Client-side requests cannot manually claim success or alter test evidence; status is derived solely from the backend test runner.
+
+### 5. Failure Intelligence & Negative Knowledge
+- Captures counter-examples and failed attempts (e.g., standard blocking index builds triggering PostgreSQL error `54000: lock_not_available`).
+- Preserves negative knowledge to prune known-bad solution branches before code is committed.
+
+### 6. Learning Transfer Demonstration (Memory Reuse Lab)
+- Side-by-side benchmark demonstrating collective learning:
+  - **Task A (Seed Experience)**: Generates a fix for a migration deadlock, runs pytest, and commits `Lesson L-88` to FalkorDB.
+  - **Task B (Future Similar Task)**: Submits a related problem, performs live retrieval against FalkorDB, and proves that the newly created proposal is directly informed by Task A's lesson!
+
+---
+
+## Quick Start & Setup
+
+### 1. Prerequisites
+- **Python**: 3.11+
+- **Node.js**: 18+ & **npm**
+- **Docker**: For running FalkorDB and PostgreSQL
+
+### 2. Start Database Services
 ```bash
-docker-compose up -d falkordb
+# Start FalkorDB on port 6379 and PostgreSQL on port 5433
+docker-compose up -d falkordb postgres-test
 ```
-To verify FalkorDB connection:
+
+### 3. Backend Setup
 ```bash
-.venv\Scripts\python.exe -c "from app.memory.graph_repository import GraphMemoryRepository; repo = GraphMemoryRepository(); print('FalkorDB Connected:', repo.ping())"
+# Activate virtual environment
+# Windows:
+.venv\Scripts\activate
+# Linux/macOS:
+# source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment variables in project-root .env:
+# GEMINI_API_KEY=your_key_here
+# GEMINI_MODEL=gemini-3.8-flash
+# FALKORDB_HOST=localhost
+# FALKORDB_PORT=6379
+
+# Run FastAPI backend server (port 8000)
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### Environment Variables
-Configured in the project-root `.env`:
-```env
-# Gemini LLM configuration (Required for live Gemini solver; not required for deterministic demo)
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-3.8-flash
-
-# FalkorDB settings (defaults used if omitted)
-FALKORDB_HOST=localhost
-FALKORDB_PORT=6379
+Verify backend health:
+```bash
+curl http://127.0.0.1:8000/api/v1/health
+# {"status":"healthy","service":"HiveMind API","database_connected":true,"version":"1.0.0"}
 ```
+
+### 4. Frontend Setup
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install npm dependencies
+npm install
+
+# Start Vite dev server on port 3000
+npm run dev -- --host 127.0.0.1 --port 3000
+```
+Open **[http://127.0.0.1:3000](http://127.0.0.1:3000)** in your browser.
 
 ---
 
-## 2. Running the Showcase Demo
+## Automated Verification & Test Suite
 
-The cross-task learning loop demonstration illustrates the full 5-stage lifecycle of HiveMind:
+HiveMind features an automated test suite verifying deterministic verification rules, graph integrity, and API lifecycle:
 
 ```bash
-# Run standalone demonstration (deterministic, zero external API cost)
-.venv\Scripts\python.exe app/ai/demo_learning_loop.py
-```
+# Run all 58 backend tests (including SQLite/Postgres lifecycle persistence and API tests)
+pytest -v
 
-### Demo Stages & Expected Output
-1. **Stage 1 (Task 1 Submission)**:
-   - Incident: Database migration deadlock on an active orders table.
-   - Solver proposes: Non-blocking concurrent index build.
-   - Status: Marked strictly as `UNVERIFIED`.
-2. **Stage 2 (Controlled Fixture Execution & Verification)**:
-   - Designates `tests/test_migration_fixture.py`.
-   - TestRunner executes pytest in a controlled sandbox.
-   - Verifier checks proposal ID matching and exit code 0.
-   - Status updated to `VERIFIED_SUCCESS` with an empirical evidence trail.
-3. **Stage 3 (Graph Memory Persistence)**:
-   - MemoryCurator creates an `ExperienceRecord` and persists nodes in FalkorDB: `(Task)->[:HAS_PROBLEM]->(Problem)->[:HAS_ATTEMPT]->(Attempt)->[:PRODUCED_OUTCOME]->(Outcome)` and `(Lesson)-[:SUPPORTED_BY]->(Outcome)`.
-4. **Stage 4 (Cross-Task Learning & Retrieval)**:
-   - Task 2 submitted: Similar table lock timeout on a customers table.
-   - Investigator queries FalkorDB via `MemoryRetriever`.
-   - Exact lesson from Task 1 is retrieved with its verified evidence and similarity score.
-5. **Stage 5 (Grounded Second Proposal)**:
-   - Solver incorporates the retrieved lesson ID into `memory_ids_used`.
-   - Fix reasoning is explicitly grounded in the previous empirical lesson.
+# Run deterministic learning loop verification demo (zero external API cost)
+python app/ai/demo_learning_loop.py
 
----
-
-## 3. Running Test Suites
-
-HiveMind maintains strict separation between **deterministic regression tests** (free, offline, rapid) and **live Gemini provider tests**.
-
-### A. Deterministic Pytest Regression Suite (Offline)
-Runs all 16 evidence-integrity, schema-validation, ranking, and sandbox tests:
-```bash
-.venv\Scripts\python.exe -m pytest -v
-```
-
-### B. Full End-to-End Learning Loop Test
-Tests the full cross-task learning loop including idempotency and rejection checks:
-```bash
-.venv\Scripts\python.exe app/ai/test_end_to_end_learning.py
-```
-
-### C. Live Gemini Provider Workflows (Requires API Key)
-Tests live Gemini 3.8 Flash model invocation and memory package grounding:
-```bash
-# 1. Test live Gemini connection with exponential backoff retry:
-.venv\Scripts\python.exe -m app.ai.test_gemini
-
-# 2. Test live Gemini Solver reasoning over retrieved FalkorDB graph lessons:
-.venv\Scripts\python.exe -m app.ai.test_propose_workflow
+# Test frontend production build
+cd frontend && npm run build
 ```
 
 ---
 
-## 4. Architecture & Public Interface for Backend Integration
+## REST API Specification
 
-> [!TIP]
-> For a comprehensive integration guide, sequence diagrams, illustrative API schemas, and error handling patterns, see [docs/BACKEND_INTEGRATION.md](docs/BACKEND_INTEGRATION.md).
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/health` | Health check verifying API and FalkorDB connectivity. |
+| `POST` | `/api/v1/proposals` | Submit a task to retrieve memory and generate a fix proposal (`UNVERIFIED`). |
+| `POST` | `/api/v1/proposals/{id}/evaluate` | Run an isolated pytest fixture under `tests/` and classify evidence. |
+| `POST` | `/api/v1/proposals/{id}/persist` | Ingest verified outcome and reusable lesson into FalkorDB DAG. |
+| `GET` | `/api/v1/proposals/{id}` | Retrieve canonical proposal record. |
+| `GET` | `/api/v1/proposals/{id}/evaluation` | Retrieve evaluation execution evidence. |
+| `GET` | `/api/v1/proposals/{id}/persisted` | Retrieve persisted lesson node metadata. |
 
-The backend service interacts directly with `HiveMindOrchestrator` (`app.ai.orchestrator`):
-
-```python
-from app.ai.orchestrator import HiveMindOrchestrator
-
-orchestrator = HiveMindOrchestrator()
-```
-
-### Core Public Methods
-
-#### 1. `propose_solution`
-```python
-result = orchestrator.propose_solution(
-    task_description="Database transaction deadlock when creating index during migration",
-    category="database_migration",  # optional
-    limit=5                         # optional, default 5 (1-10)
-)
-```
-- **Returns**: Dictionary with `task_id`, `proposal_id`, `task_description`, `proposed_fix`, `memories` (retrieved lessons), `memory_count`, `proposal` (structured Pydantic `SolverResponse`), and `verification_status="UNVERIFIED"`.
-
-#### 2. `evaluate_proposal`
-```python
-eval_result = orchestrator.evaluate_proposal(
-    task_id=result["task_id"],
-    proposal_id=result["proposal_id"],
-    task_description=result["task_description"],
-    proposed_fix=result["proposed_fix"],
-    test_file="tests/test_migration_fixture.py", # path relative to project root (must be in tests/)
-    is_relevant=True,                            # False forces UNVERIFIED status
-    test_description="Verify non-blocking index prevents migration deadlocks",
-)
-```
-- **Returns**: Dictionary with `test_execution` (`TestExecutionResult`), `verification` (`VerificationResult`), `verification_status` (`"VERIFIED_SUCCESS"`, `"VERIFIED_FAILURE"`, or `"UNVERIFIED"`), and `evidence` string.
-
-#### 3. `record_verification`
-```python
-record = orchestrator.record_verification(
-    task_description=result["task_description"],
-    problem_title="Index creation deadlock",
-    category="database_migration",
-    proposal=result["proposal"],
-    test_result=eval_result["test_execution"],
-    lesson_content="When adding indexes under load, build concurrently to prevent table lock deadlocks.",
-    test_spec=eval_result["test_specification"],
-    task_id=result["task_id"],
-    proposal_id=result["proposal_id"],
-)
-```
-- **Returns**: Dictionary with `task_id`, `proposal_id`, `verification_status`, `lesson_saved` (`bool`), `lesson_id` (`str | None`), `outcome_id`.
+Interactive OpenAPI documentation is available at **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)**.
 
 ---
 
-## 5. Verification Integrity & Causal Boundaries
+## Tech Stack Summary
 
-HiveMind enforces strict verification boundaries to prevent false claims:
-
-1. **Test Passing vs. Causal Validation**:
-   - A `VERIFIED_SUCCESS` outcome certifies that an explicitly designated test file was executed under controlled conditions and exited with returncode 0.
-   - It **does not claim universal correctness or autonomous formal verification** of arbitrary code modifications across unobserved edge cases.
-2. **Relevance Enforcement**:
-   - A passing test that is not explicitly designated as relevant to the proposal produces `UNVERIFIED`.
-   - Smoke tests cannot be used to verify unrelated engineering fixes.
-3. **Execution Sandbox**:
-   - `TestRunner` executes tests only within the designated `tests/` directory; attempts to target arbitrary scripts outside `tests/` are blocked with `ValueError`.
-4. **Lesson Eligibility Gate**:
-   - Schema validators (`ExperienceRecord.validate_evidence()`) strictly prohibit creating a lesson from an `UNVERIFIED` outcome or an outcome with empty evidence.
-5. **Anti-Hallucination Gate**:
-   - `Solver` strictly verifies that any memory IDs cited by the LLM in `memory_ids_used` exist in the retrieved memory package; unknown IDs are rejected.
+- **Frontend**: React 18, Vite 5, TypeScript, Tailwind CSS, Three.js, Lucide React.
+- **Backend**: FastAPI, Uvicorn, Pydantic v2, Python 3.11+.
+- **AI Core**: Google GenAI SDK (Gemini 3.8 Flash), Sentence-Transformers Embeddings.
+- **Graph Database**: FalkorDB (Cypher Query Language over Redis protocol).
+- **Persistence**: SQLite (development) & PostgreSQL (production migration tested).
+- **Execution Sandbox**: Subprocess-isolated Pytest TestRunner with strict directory whitelisting.
 
 ---
 
-## 6. Graph Persistence Safety & Known Limitations
+## License
 
-1. **Multi-Query Cypher Statements**:
-   - `GraphMemoryRepository.save_experience()` writes graph entities using individual Cypher queries.
-   - *Safety Guarantee*: All statements use idempotent `MERGE` clauses keyed on unique entity IDs. Retrying a write safely completes any missing relations without data corruption or duplicate nodes.
-   - *Visibility Guarantee*: Retrieval queries require an inner `MATCH (l:Lesson)-[:SUPPORTED_BY]->(o:Outcome)` with `o.status IN ['VERIFIED_SUCCESS', 'VERIFIED_FAILURE']`. An incomplete write can never expose an unverified or evidence-less lesson in retrieval.
-   - *Mitigation for Backend*: Execute writes sequentially per task/proposal rather than dispatching parallel simultaneous writes to the same proposal ID.
-
----
-
-## 7. Backend REST API Service (`backend/`)
-
-The FastAPI service exposes HiveMind's memory and verification pipeline via clean REST endpoints.
-
-### Starting the Backend Server
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### Interactive API Documentation (Swagger & ReDoc)
-- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- **OpenAPI Schema**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
-
-### Available Endpoints
-- `GET /health` & `GET /api/v1/health`: Service & FalkorDB health check.
-- `POST /api/v1/proposals`: Grounded solution generation (always returns `UNVERIFIED`).
-- `POST /api/v1/proposals/{proposal_id}/evaluate`: Sandboxed pytest execution (`tests/`) & empirical verification.
-- `POST /api/v1/proposals/{proposal_id}/persist`: Gated FalkorDB persistence (lessons saved only for verified outcomes).
-- `GET /api/v1/proposals/{proposal_id}`: Retrieve cached proposal details.
-- `GET /api/v1/proposals/{proposal_id}/evaluation`: Retrieve cached evaluation and test execution record.
-- `GET /api/v1/proposals/{proposal_id}/persisted`: Retrieve cached persistence audit record.
-
----
-
-## 8. Real PostgreSQL Integration Testing
-
-> [!NOTE]
-> **Architectural Separation**: FalkorDB is HiveMind's native graph-memory engine. PostgreSQL is an isolated relational database target used strictly to test and verify database migration proposals (such as non-blocking concurrent index creation).
-
-### Starting the Isolated Test PostgreSQL Container
-To run real PostgreSQL migration integration tests without affecting production or local databases:
-```powershell
-docker run -d --name hivemind-postgres-test -p 5433:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=hivemind_test postgres:16-alpine
-```
-
-### Running PostgreSQL Integration Tests
-```powershell
-# Run the 5 PostgreSQL concurrent migration scenarios
-.\.venv\Scripts\python.exe -m pytest tests/test_postgres_migration.py -v
-```
-
-These integration tests empirically verify:
-1. Creating test tables and building indexes concurrently in PostgreSQL.
-2. Confirming that `CREATE INDEX CONCURRENTLY` cannot run inside an explicit transaction block (`ActiveSqlTransaction`).
-3. Running concurrent background read and write traffic while an index is being built without deadlocks or table-exclusive locks.
-4. Validating the resulting index status using PostgreSQL system catalogs (`pg_index.indisvalid = True`, `pg_index.indisready = True`).
-5. Handling failures/interrupted concurrent builds (detecting `indisvalid = False` in the catalog and performing non-blocking cleanup via `DROP INDEX CONCURRENTLY IF EXISTS`).
-
-*If PostgreSQL is unavailable, these tests are cleanly reported as `SKIPPED` with instructions rather than falsely reporting success.*
-
----
-
-## 9. Running Test Suites
-
-HiveMind maintains strict test isolation:
-
-```powershell
-# 1. Run complete automated regression suite (44 tests, offline, 0 cost)
-.\.venv\Scripts\python.exe -m pytest -v
-
-# 2. Run standalone 5-stage cross-task learning loop demo
-.\.venv\Scripts\python.exe app/ai/demo_learning_loop.py
-
-# 3. Run full end-to-end learning test
-.\.venv\Scripts\python.exe app/ai/test_end_to_end_learning.py
-
-# 4. Optional: Live Gemini Provider Tests (Requires valid GEMINI_API_KEY in .env)
-.\.venv\Scripts\python.exe -m app.ai.test_gemini
-.\.venv\Scripts\python.exe -m app.ai.test_propose_workflow
-```
-
-### Warnings & Upstream Dependencies
-- **Starlette HTTP 422**: Fully updated to `HTTP_422_UNPROCESSABLE_CONTENT` (RFC 9110).
-- **Starlette TestClient Warning**: Starlette 1.8 emits an informational deprecation warning suggesting `httpx2` for its test client while running tests using `httpx`. This does not affect runtime application correctness or test validity.
+Apache License 2.0. Built for the Google DeepMind & Agentic AI Collective Intelligence Challenge.

@@ -45,6 +45,9 @@ htmlcov/
 node_modules/
 .next/
 out/
+frontend/dist/
+dist/
+.vite/
 
 # Local databases and lifecycle data
 data/*.db
