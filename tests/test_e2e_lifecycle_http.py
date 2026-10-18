@@ -3,17 +3,127 @@ End-to-end HTTP integration and lifecycle validation suite for HiveMind Phase 12
 Exercises the live API over HTTP against running FalkorDB, PostgreSQL, and SQLite lifecycle store.
 """
 
+import atexit
+import os
+import subprocess
+import sys
+import tempfile
+import time
 from uuid import uuid4
+
 import httpx
 import pytest
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_HOST = "127.0.0.1"
+BASE_PORT = 8000
+BASE_URL = f"http://{BASE_HOST}:{BASE_PORT}"
 
 
 @pytest.fixture(scope="module")
 def http_client():
-    with httpx.Client(base_url=BASE_URL, timeout=60.0) as client:
-        yield client
+    server_proc = None
+    log_file = None
+
+    already_running = False
+    try:
+        resp = httpx.get(f"{BASE_URL}/health", timeout=1.0)
+        if resp.status_code == 200:
+            already_running = True
+    except Exception:
+        already_running = False
+
+    if not already_running:
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        log_file = tempfile.TemporaryFile()
+        env = os.environ.copy()
+        server_proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "backend.main:app",
+                "--host",
+                BASE_HOST,
+                "--port",
+                str(BASE_PORT),
+                "--log-level",
+                "warning",
+            ],
+            cwd=repo_root,
+            env=env,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+        )
+
+        def _cleanup():
+            if server_proc and server_proc.poll() is None:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(server_proc.pid)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
+                else:
+                    server_proc.terminate()
+                try:
+                    server_proc.wait(timeout=5)
+                except Exception:
+                    server_proc.kill()
+                    server_proc.wait(timeout=5)
+
+        atexit.register(_cleanup)
+
+        # Wait until the server is ready
+        start_time = time.time()
+        timeout = 30.0
+        ready = False
+        while time.time() - start_time < timeout:
+            if server_proc.poll() is not None:
+                log_file.seek(0)
+                output = log_file.read().decode("utf-8", errors="replace")
+                raise RuntimeError(
+                    f"FastAPI server terminated unexpectedly with code {server_proc.returncode}:\n{output}"
+                )
+            try:
+                resp = httpx.get(f"{BASE_URL}/health", timeout=1.0)
+                if resp.status_code == 200:
+                    ready = True
+                    break
+            except Exception:
+                pass
+            time.sleep(0.3)
+
+        if not ready:
+            _cleanup()
+            log_file.seek(0)
+            output = log_file.read().decode("utf-8", errors="replace")
+            raise TimeoutError(f"FastAPI server failed to start within {timeout}s:\n{output}")
+
+    try:
+        with httpx.Client(base_url=BASE_URL, timeout=180.0) as client:
+            yield client
+    finally:
+        if server_proc is not None:
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(server_proc.pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+            else:
+                server_proc.terminate()
+            try:
+                server_proc.wait(timeout=5)
+            except Exception:
+                server_proc.kill()
+                server_proc.wait(timeout=5)
+        if log_file is not None:
+            try:
+                log_file.close()
+            except Exception:
+                pass
 
 
 def test_e2e_health_and_docs_live_http(http_client):
@@ -34,6 +144,21 @@ def test_e2e_health_and_docs_live_http(http_client):
     assert "/api/v1/proposals" in paths
 
 
+def _post_proposal_with_retry(client, payload, max_retries=5):
+    """Post to /api/v1/proposals with backoff handling for upstream Gemini rate limits (429/503)."""
+    for attempt in range(max_retries):
+        resp = client.post("/api/v1/proposals", json=payload)
+        if resp.status_code in (429, 503) and attempt < max_retries - 1:
+            try:
+                retry_after = int(resp.headers.get("Retry-After", "5"))
+            except (ValueError, TypeError):
+                retry_after = 5
+            time.sleep(retry_after + 1)
+            continue
+        return resp
+    return resp
+
+
 def test_e2e_full_lifecycle_and_cross_task_retrieval(http_client):
     """
     Task 2: Execute complete lifecycle:
@@ -50,9 +175,9 @@ def test_e2e_full_lifecycle_and_cross_task_retrieval(http_client):
     )
 
     # 1. Submit proposal
-    prop_resp = http_client.post(
-        "/api/v1/proposals",
-        json={
+    prop_resp = _post_proposal_with_retry(
+        http_client,
+        {
             "task_description": task_desc_1,
             "category": "database_migration",
             "limit": 5,
@@ -137,9 +262,9 @@ def test_e2e_full_lifecycle_and_cross_task_retrieval(http_client):
     task_desc_2 = (
         f"Active orders table transaction deadlock when creating index [{unique_marker}]"
     )
-    prop2_resp = http_client.post(
-        "/api/v1/proposals",
-        json={
+    prop2_resp = _post_proposal_with_retry(
+        http_client,
+        {
             "task_description": task_desc_2,
             "category": "database_migration",
             "limit": 5,
@@ -174,9 +299,9 @@ def test_e2e_lifecycle_integrity_rejections(http_client):
     - Unverified outcome lesson persistence -> 422
     """
     # 1. Propose valid item
-    resp = http_client.post(
-        "/api/v1/proposals",
-        json={
+    resp = _post_proposal_with_retry(
+        http_client,
+        {
             "task_description": "Integrity validation proposal for test suite",
             "category": "testing",
             "limit": 3,

@@ -20,7 +20,7 @@ export const ProposalService = {
     return request<ProposalResponse>('/proposals', {
       method: 'POST',
       body: JSON.stringify(data),
-      timeoutMs: 60000, // LLM proposals may take several seconds
+      timeoutMs: 180000, // LLM proposals may take up to 2-3 minutes under network latency
     });
   },
 

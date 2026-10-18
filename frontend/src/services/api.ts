@@ -25,7 +25,7 @@ export async function request<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { timeoutMs = 60000, headers = {}, ...customConfig } = options;
+  const { timeoutMs = 180000, headers = {}, ...customConfig } = options;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
