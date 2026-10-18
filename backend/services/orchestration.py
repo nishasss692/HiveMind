@@ -27,6 +27,9 @@ class OrchestrationService:
                 host=settings.falkordb_host,
                 port=settings.falkordb_port,
                 graph_name=settings.falkordb_graph_name,
+                password=settings.falkordb_password,
+                username=settings.falkordb_username,
+                ssl=settings.falkordb_ssl,
             )
             self.orchestrator = HiveMindOrchestrator(repository=self.repository)
 

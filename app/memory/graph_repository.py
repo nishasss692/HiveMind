@@ -14,8 +14,18 @@ class GraphMemoryRepository:
         host: str = "localhost",
         port: int = 6379,
         graph_name: str = "hivemind",
+        password: str | None = None,
+        username: str | None = None,
+        ssl: bool = False,
     ) -> None:
-        self.client = FalkorDB(host=host, port=port)
+        kwargs: dict[str, Any] = {"host": host, "port": port}
+        if password:
+            kwargs["password"] = password
+        if username:
+            kwargs["username"] = username
+        if ssl:
+            kwargs["ssl"] = True
+        self.client = FalkorDB(**kwargs)
         self.graph = self.client.select_graph(graph_name)
 
     def ping(self) -> bool:

@@ -22,6 +22,9 @@ class Settings:
     falkordb_host: str = "localhost"
     falkordb_port: int = 6379
     falkordb_graph_name: str = "hivemind"
+    falkordb_password: str | None = None
+    falkordb_username: str | None = None
+    falkordb_ssl: bool = False
     lifecycle_db_path: str = str(PROJECT_ROOT / "data" / "lifecycle.db")
     cors_allowed_origins: list[str] | None = None
     api_v1_prefix: str = "/api/v1"
@@ -43,6 +46,16 @@ class Settings:
         self.falkordb_graph_name = os.getenv(
             "FALKORDB_GRAPH_NAME", self.falkordb_graph_name
         )
+        self.falkordb_password = os.getenv(
+            "FALKORDB_PASSWORD", self.falkordb_password
+        )
+        self.falkordb_username = os.getenv(
+            "FALKORDB_USERNAME", self.falkordb_username
+        )
+        ssl_val = os.getenv("FALKORDB_SSL", "").strip().lower()
+        if ssl_val in ("true", "1", "yes"):
+            self.falkordb_ssl = True
+
         self.lifecycle_db_path = os.getenv(
             "LIFECYCLE_DB_PATH", self.lifecycle_db_path
         )
