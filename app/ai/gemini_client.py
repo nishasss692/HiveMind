@@ -8,7 +8,7 @@ from google.genai import errors, types
 
 
 # Load environment variables from the project-root .env file.
-load_dotenv()
+load_dotenv(override=True)
 
 
 def create_gemini_client() -> genai.Client:
