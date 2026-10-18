@@ -54,6 +54,8 @@ class Settings:
         self.falkordb_username = os.getenv(
             "FALKORDB_USERNAME", self.falkordb_username
         )
+        if not self.falkordb_username and self.falkordb_password and ("cloud" in str(self.falkordb_host).lower() or "aws" in str(self.falkordb_host).lower()):
+            self.falkordb_username = "falkordb"
         ssl_val = os.getenv("FALKORDB_SSL", "").strip().lower()
         if ssl_val in ("true", "1", "yes"):
             self.falkordb_ssl = True
