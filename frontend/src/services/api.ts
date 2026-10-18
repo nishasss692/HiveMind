@@ -2,8 +2,19 @@
  * API client configuration and base fetch wrapper.
  */
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
+function getBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (!envUrl) {
+    return 'http://127.0.0.1:8000/api/v1';
+  }
+  let base = envUrl.trim().replace(/\/+$/, '');
+  if (!base.endsWith('/api/v1') && !base.endsWith('/api')) {
+    base = `${base}/api/v1`;
+  }
+  return base;
+}
+
+export const API_BASE_URL = getBaseUrl();
 
 export class ApiError extends Error {
   status: number;

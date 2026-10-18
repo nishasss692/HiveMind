@@ -204,6 +204,7 @@ if genai_errors and hasattr(genai_errors, "APIError"):
 # Health check endpoints
 @app.get("/health", response_model=HealthResponse, tags=["health"])
 @app.get("/api/v1/health", response_model=HealthResponse, tags=["health"])
+@app.get("/api/health", response_model=HealthResponse, tags=["health"])
 def health_check() -> dict[str, Any]:
     """Check API and database health status."""
     service = get_orchestration_service()
@@ -216,9 +217,10 @@ def health_check() -> dict[str, Any]:
     }
 
 
-# Include proposals router under /api/v1 and /api aliases
+# Include proposals router under root, /api, and /api/v1 aliases
 app.include_router(proposals_router, prefix="/api/v1")
 app.include_router(proposals_router, prefix="/api")
+app.include_router(proposals_router)
 
 
 if __name__ == "__main__":
