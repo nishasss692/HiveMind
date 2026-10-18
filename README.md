@@ -69,31 +69,182 @@ flowchart TB
 
 ---
 
-## FalkorDB Causal Knowledge Graph Schema
+## 🗺️ FalkorDB Graph Map & Schema
 
-In HiveMind, memory is not a flat list of text documents. It is a directed acyclic graph (DAG) of grounded experiences:
+In HiveMind, memory is not a flat list of text documents or lossy vector embeddings. It is an immutable, causal directed acyclic graph (DAG) in **FalkorDB** containing 8 strongly-typed node classes connected through semantic relationships.
+
+### Graph Topology & Relationships
 
 ```mermaid
-graph LR
-    Task["(:Task)<br/>Canonical Task Scoping"] -->|HAS_PROBLEM| Problem["(:Problem)<br/>Symptom & Domain Category"]
-    Problem -->|HAS_ATTEMPT| Attempt["(:Attempt)<br/>Generated Code Patch"]
-    Attempt -->|PRODUCED_OUTCOME| Outcome["(:Outcome)<br/>Status: VERIFIED_SUCCESS"]
-    Attempt -->|PRODUCED_FAILURE| Failure["(:Failure)<br/>Status: VERIFIED_FAILURE"]
-    
-    Lesson["(:Lesson)<br/>Reusable Engineering Insight"] -->|SUPPORTED_BY| Outcome
+graph TD
+    Task["(:Task)<br/>• id<br/>• description<br/>• created_at"] 
+    Problem["(:Problem)<br/>• id<br/>• title<br/>• category<br/>• description"]
+    Agent["(:Agent)<br/>• id<br/>• role"]
+    Attempt["(:Attempt)<br/>• id<br/>• description<br/>• status<br/>• created_at"]
+    Solution["(:Solution)<br/>• id<br/>• description"]
+    Failure["(:Failure)<br/>• id<br/>• description<br/>• error_type"]
+    Outcome["(:Outcome)<br/>• id<br/>• status: VERIFIED_SUCCESS | VERIFIED_FAILURE<br/>• evidence<br/>• verified_at"]
+    Lesson["(:Lesson)<br/>• id<br/>• content<br/>• confidence<br/>• created_at"]
+
+    Task -->|HAS_PROBLEM| Problem
+    Problem -->|HAS_ATTEMPT| Attempt
+    Agent -->|PERFORMED| Attempt
+    Attempt -->|USED_SOLUTION| Solution
+    Attempt -->|PRODUCED_FAILURE| Failure
+    Attempt -->|PRODUCED_OUTCOME| Outcome
     Lesson -->|APPLIES_TO| Problem
+    Lesson -->|SUPPORTED_BY| Outcome
     Failure -.->|SUPPORTS_LESSON| Lesson
 
     classDef success fill:#ECFDF5,stroke:#059669,stroke-width:2px,color:#065F46;
     classDef failure fill:#FFF1F2,stroke:#E11D48,stroke-width:2px,color:#9F1239;
     classDef lesson fill:#EFF6FF,stroke:#2563EB,stroke-width:2px,color:#1E40AF;
-    classDef neutral fill:#F8FAFC,stroke:#64748B,stroke-width:1px,color:#334155;
+    classDef neutral fill:#F8FAFC,stroke:#64748B,stroke-width:1.5px,color:#334155;
 
     class Outcome success;
     class Failure failure;
     class Lesson lesson;
-    class Task,Problem,Attempt neutral;
+    class Task,Problem,Attempt,Agent,Solution neutral;
 ```
+
+### Node Entity & Property Reference
+
+| Node Label | Key Properties | Role in Memory Lifecycle |
+|---|---|---|
+| `(:Task)` | `id`, `description`, `created_at` | Root boundary representing the user-requested engineering objective. |
+| `(:Problem)` | `id`, `title`, `category`, `description` | Formal domain classification (e.g., `concurrency`, `migrations`, `database`). |
+| `(:Agent)` | `id`, `role` | Identity and persona of the executing agent (e.g. `Investigator`, `Solver`). |
+| `(:Attempt)` | `id`, `description`, `status`, `created_at` | An empirical attempt containing a generated code patch or strategy. |
+| `(:Solution)` | `id`, `description` | The concrete solution payload (patch, configuration, or migration SQL). |
+| `(:Failure)` | `id`, `description`, `error_type` | Captured negative evidence (e.g. PostgreSQL `lock_not_available`, error code `54000`). |
+| `(:Outcome)` | `id`, `status`, `evidence`, `verified_at` | Deterministic verification result (`VERIFIED_SUCCESS` / `VERIFIED_FAILURE`) with stdout/stderr. |
+| `(:Lesson)` | `id`, `content`, `confidence`, `created_at` | High-order engineering heuristic synthesized only from verified empirical outcomes. |
+
+### Semantic Relationships
+
+- `(:Task)-[:HAS_PROBLEM]->(:Problem)`: Scopes the core failure or obstacle to a domain problem.
+- `(:Problem)-[:HAS_ATTEMPT]->(:Attempt)`: Links every trial and iteration attempted on this problem.
+- `(:Agent)-[:PERFORMED]->(:Attempt)`: Attributes work to the executing agent.
+- `(:Attempt)-[:USED_SOLUTION]->(:Solution)`: Records the specific solution patch executed.
+- `(:Attempt)-[:PRODUCED_FAILURE]->(:Failure)`: Links to structured failure symptoms and error codes.
+- `(:Attempt)-[:PRODUCED_OUTCOME]->(:Outcome)`: Binds to deterministic test runner output and status.
+- `(:Lesson)-[:APPLIES_TO]->(:Problem)`: Indexes lessons for cross-task semantic retrieval.
+- `(:Lesson)-[:SUPPORTED_BY]->(:Outcome)`: **Integrity guarantee**: Lessons can *only* exist when backed by a verified outcome.
+- `(:Failure)-[:SUPPORTS_LESSON]->(:Lesson)`: Links negative knowledge directly to derived prevention rules.
+
+---
+
+### How the Agent Queries FalkorDB
+
+HiveMind's agent subsystem queries FalkorDB at three crucial stages using Cypher:
+
+#### 1. Contextual Experience Retrieval Query
+When a new task is submitted, `Investigator` / `MemoryRetriever` queries FalkorDB to find relevant past lessons, positive outcomes, and counter-example failures:
+
+```cypher
+MATCH (l:Lesson)-[:APPLIES_TO]->(p:Problem)
+MATCH (l)-[:SUPPORTED_BY]->(o:Outcome)
+WHERE o.status IN ['VERIFIED_SUCCESS', 'VERIFIED_FAILURE']
+OPTIONAL MATCH (a:Attempt)-[:PRODUCED_OUTCOME]->(o)
+OPTIONAL MATCH (a)-[:PRODUCED_FAILURE]->(f:Failure)
+RETURN DISTINCT
+    l.id, l.content, l.confidence,
+    p.id, p.title, p.description, p.category,
+    o.id, o.status, o.evidence,
+    a.id, a.description,
+    f.description, f.error_type
+```
+
+#### 2. Deep Problem History & Anti-Pattern Traversal Query
+When diagnosing recurring regressions, the agent queries the full causal lineage of previous attempts and failures:
+
+```cypher
+MATCH (p:Problem {id: $problem_id})-[:HAS_ATTEMPT]->(a:Attempt)
+OPTIONAL MATCH (a)-[:PRODUCED_FAILURE]->(f:Failure)
+OPTIONAL MATCH (a)-[:PRODUCED_OUTCOME]->(o:Outcome)
+RETURN p.id, p.title,
+       a.id, a.description, a.status,
+       f.id, f.description, f.error_type,
+       o.id, o.status, o.evidence
+ORDER BY a.created_at ASC
+```
+
+#### 3. Causal DAG Mutation Query (Atomic Ingestion)
+When tests succeed (or confirm a negative pattern), `MemoryCurator` commits the verified outcome and lesson atomically into FalkorDB without overwriting historical records:
+
+```cypher
+MERGE (l:Lesson {id: $lesson_id})
+SET l.content = $content,
+    l.confidence = $confidence,
+    l.created_at = $created_at
+WITH l
+MATCH (p:Problem {id: $problem_id})
+MATCH (o:Outcome {id: $outcome_id})
+MERGE (l)-[:APPLIES_TO]->(p)
+MERGE (l)-[:SUPPORTED_BY]->(o)
+```
+
+---
+
+## 🛡️ How FalkorDB Drives Agent Decisions (The Graph in Action)
+
+FalkorDB is not a passive logging database in HiveMind—**it is the central decision-making engine that dictates every agent action**. Without the graph, an LLM agent operates in an ephemeral vacuum, repeating past deadlocks and hallucinating non-viable fixes. With FalkorDB, the agent acts as an empirical, self-improving reasoning system.
+
+### Graph-Driven Decision Loop
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User / CI Pipeline
+    participant API as FastAPI Orchestrator
+    participant FalkorDB as FalkorDB Graph
+    participant Solver as Gemini 3.8 Solver
+    participant Sandbox as Subprocess TestRunner
+    participant Curator as MemoryCurator
+
+    User->>API: Submit Task ("Postgres deadlock on index migration")
+    Note over API,FalkorDB: Step 1: Graph Querying & Subgraph Traversal
+    API->>FalkorDB: Cypher: Retrieve Lessons & Anti-Patterns for category='database'
+    FalkorDB-->>API: Returns Lesson L-88 (CONCURRENT index) & Failure F-12 (lock_not_available)
+    
+    Note over API,Solver: Step 2: Graph-Conditioned Decision Making
+    API->>Solver: Prompt with Task + Grounded Graph Evidence
+    Note over Solver: Decision Logic:<br/>1. Prunes failed branch F-12 (Never repeat lock timeout)<br/>2. Adopts validated solution L-88 (CREATE INDEX CONCURRENTLY)<br/>3. Strictly binds memory_ids_used=['L-88']
+    Solver-->>API: Returns Grounded Proposal (Cites L-88)
+    
+    Note over API,Sandbox: Step 3: Sandboxed Empirical Verification
+    API->>Sandbox: Execute Isolated Pytest Subprocess
+    Sandbox-->>API: Exit Code 0 (Passed, 0 lock contention)
+    
+    Note over API,FalkorDB: Step 4: Causal Graph Ingestion
+    API->>Curator: Compile Causal Experience Record
+    Curator->>FalkorDB: Cypher MERGE: Task, Problem, Attempt, Outcome, Lesson
+    FalkorDB-->>User: Proposal VERIFIED_SUCCESS + Persisted in Graph Memory
+```
+
+### Where the Agent's Decisions Come From the Graph
+
+Every critical decision made by the HiveMind agent originates directly from FalkorDB graph nodes and traversals:
+
+#### 1. Positive Solution Grounding (What To Do)
+- **Graph Source**: `(:Lesson)-[:SUPPORTED_BY]->(:Outcome {status: "VERIFIED_SUCCESS"})`
+- **Agent Decision**: When FalkorDB returns a verified lesson (e.g., *"When adding a unique index to a high-concurrency PostgreSQL table, use `CREATE UNIQUE INDEX CONCURRENTLY` with statement timeouts"*), the solver agent grounds its `proposed_fix` directly on the verified lesson content and references `memory_ids_used: ["lesson-xxx"]`.
+- **Integrity Enforcement**: The solver prompt strictly restricts `memory_ids_used` to lesson IDs retrieved from FalkorDB; inventing or modifying memory IDs is rejected at schema validation.
+
+#### 2. Negative Knowledge Pruning (What NOT To Do)
+- **Graph Source**: `(:Attempt)-[:PRODUCED_FAILURE]->(:Failure {error_type: "54000"})`
+- **Agent Decision**: Standard LLMs repeatedly attempt naive `ALTER TABLE ADD CONSTRAINT UNIQUE` because it is syntactically concise. FalkorDB contains the negative knowledge showing that this causes an `AccessExclusiveLock` timeout (`54000: lock_not_available`). The agent's decision engine identifies the past failure and **explicitly prunes that strategy** from its search space before generating code.
+
+#### 3. Strict Verification & Anti-Hallucination Integrity
+- **Graph Source**: `(:Outcome {evidence: "..."})`
+- **Agent Decision**: The agent is structurally prohibited from self-declaring success. An outcome node can only be written to FalkorDB when the sandboxed test runner returns a deterministic exit code (`0` for success, non-zero for failure). The agent's subsequent decisions are thus grounded exclusively in empirical proof rather than LLM confidence.
+
+#### 4. Cross-Task Knowledge Transfer (Task A → Task B)
+- **Task A (First Encounter)**: Agent encounters an unindexed migration deadlock. Initial naive solution fails (`VERIFIED_FAILURE` logged). Agent explores alternative, verifies `CONCURRENTLY` via pytest (`VERIFIED_SUCCESS`), and commits `Lesson L-88` to FalkorDB.
+- **Task B (Subsequent Similar Task)**: A new task arrives: *"Add unique constraint on customer_email table under heavy production traffic"*.
+  - FalkorDB instantly serves `Lesson L-88`.
+  - The agent generates the correct non-blocking migration on the **first attempt** with zero failed test cycles.
+  - FalkorDB directly saved compute time, prevented database outages, and eliminated human debugging intervention.
 
 ---
 
