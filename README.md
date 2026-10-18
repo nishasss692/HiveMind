@@ -375,8 +375,6 @@ cd frontend && npm run build
 | `GET` | `/api/v1/proposals/{id}/evaluation` | Retrieve evaluation execution evidence. |
 | `GET` | `/api/v1/proposals/{id}/persisted` | Retrieve persisted lesson node metadata. |
 
-Interactive OpenAPI documentation is available at **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)**.
-
 ---
 
 ## Tech Stack Summary
