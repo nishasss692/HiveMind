@@ -30,14 +30,20 @@ class GraphMemoryRepository:
     @property
     def client(self) -> FalkorDB:
         if self._client is None:
-            kwargs: dict[str, Any] = {"host": self.host, "port": self.port}
-            if self.password:
-                kwargs["password"] = self.password
-            if self.username:
-                kwargs["username"] = self.username
-            if self.ssl:
-                kwargs["ssl"] = True
-            self._client = FalkorDB(**kwargs)
+            host_str = str(self.host or "").strip()
+            if any(host_str.startswith(prefix) for prefix in ("falkor://", "falkordb://", "redis://", "rediss://")):
+                self._client = FalkorDB.from_url(host_str)
+            else:
+                kwargs: dict[str, Any] = {"host": self.host, "port": self.port}
+                if self.password:
+                    kwargs["password"] = self.password
+                if self.username:
+                    kwargs["username"] = self.username
+                is_cloud = "falkordb.cloud" in host_str.lower() or "redislabs.com" in host_str.lower()
+                if self.ssl or is_cloud:
+                    kwargs["ssl"] = True
+                    kwargs["ssl_cert_reqs"] = None
+                self._client = FalkorDB(**kwargs)
         return self._client
 
     @client.setter

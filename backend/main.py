@@ -120,9 +120,15 @@ async def redis_connection_error_handler(
 ):
     """Handle FalkorDB connection failures -> 502 Bad Gateway."""
     logger.error(f"FalkorDB connection failed: {exc}")
+    target = f"{settings.falkordb_host}:{settings.falkordb_port}"
     return JSONResponse(
         status_code=status.HTTP_502_BAD_GATEWAY,
-        content={"detail": "Database connection error. FalkorDB is unreachable."},
+        content={
+            "detail": (
+                f"Database connection error. FalkorDB is unreachable at {target}. "
+                f"Please verify FALKORDB_HOST, FALKORDB_PORT, and FALKORDB_PASSWORD in Render Environment Variables."
+            )
+        },
     )
 
 

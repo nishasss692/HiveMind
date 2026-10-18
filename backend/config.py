@@ -34,7 +34,9 @@ class Settings:
     def __post_init__(self):
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", self.gemini_api_key)
         self.gemini_model = os.getenv("GEMINI_MODEL", self.gemini_model)
-        self.falkordb_host = os.getenv("FALKORDB_HOST", self.falkordb_host)
+        self.falkordb_host = os.getenv(
+            "FALKORDB_URL", os.getenv("FALKORDB_HOST", self.falkordb_host)
+        )
 
         port_str = os.getenv("FALKORDB_PORT")
         if port_str:
