@@ -54,3 +54,7 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 *.db
+
+# Build artifacts and archives
+*.tsbuildinfo
+*.zip

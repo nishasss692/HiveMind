@@ -1,4 +1,17 @@
 import React from 'react';
+import {
+  Share2,
+  GitCommit,
+  ShieldCheck,
+  AlertOctagon,
+  Sparkles,
+  FileCode2,
+  CheckCircle2,
+  LayoutDashboard,
+  ChevronLeft,
+  ChevronRight,
+  X
+} from 'lucide-react';
 import type { HealthResponse } from '../../types/api';
 
 export type NavRoute =
@@ -14,6 +27,7 @@ export type NavRoute =
 interface NavItemDef {
   id: NavRoute;
   label: string;
+  icon: React.ReactNode;
   badge?: string | number;
 }
 
@@ -54,14 +68,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'graph',
           label: 'Memory Graph',
+          icon: <Share2 className="w-4 h-4" />,
         },
         {
           id: 'timeline',
           label: 'Learning Runs',
+          icon: <GitCommit className="w-4 h-4" />,
         },
         {
           id: 'overview',
           label: 'Overview',
+          icon: <LayoutDashboard className="w-4 h-4" />,
         },
       ],
     },
@@ -71,15 +88,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'failures',
           label: 'Failure Intelligence',
+          icon: <AlertOctagon className="w-4 h-4 text-rose-300" />,
           badge: counts?.failures ? `${counts.failures}` : undefined,
         },
         {
           id: 'transfer',
           label: 'Memory Reuse Lab',
+          icon: <Sparkles className="w-4 h-4 text-[#60A5FA]" />,
         },
         {
           id: 'trust',
           label: 'Evidence & Trust',
+          icon: <ShieldCheck className="w-4 h-4 text-emerald-300" />,
         },
       ],
     },
@@ -89,11 +109,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'proposals',
           label: 'Proposals',
+          icon: <FileCode2 className="w-4 h-4" />,
           badge: counts?.proposals !== undefined && counts.proposals > 0 ? `${counts.proposals}` : undefined,
         },
         {
           id: 'verifications',
           label: 'Verifications',
+          icon: <CheckCircle2 className="w-4 h-4" />,
           badge: counts?.verifications !== undefined && counts.verifications > 0 ? `${counts.verifications}` : undefined,
         },
       ],
@@ -123,9 +145,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Top Header */}
         <div className="p-4 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3 overflow-hidden">
-            {/* Monogram Brand Mark (No Icons) */}
-            <div className="w-9 h-9 rounded-xl bg-blue-600/30 border border-blue-400/30 flex items-center justify-center shrink-0 font-bold text-sm text-[#60A5FA] font-mono shadow-inner">
-              HM
+            {/* Neural Mark Icon */}
+            <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0 shadow-inner group">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-5 h-5 text-[#60A5FA] group-hover:scale-110 transition-transform"
+              >
+                <circle cx="12" cy="12" r="3" fill="#60A5FA" fillOpacity="0.3" />
+                <circle cx="12" cy="4" r="2" />
+                <circle cx="4" cy="18" r="2" />
+                <circle cx="20" cy="18" r="2" />
+                <path d="M12 6v3" />
+                <path d="M10.5 13.5L5.5 16.5" />
+                <path d="M13.5 13.5L18.5 16.5" />
+              </svg>
             </div>
 
             {(!isCollapsed || isMobileOpen) && (
@@ -149,10 +187,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {isMobileOpen && (
             <button
               onClick={onCloseMobile}
-              className="lg:hidden px-2.5 py-1 rounded-lg text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors border border-white/10"
+              className="lg:hidden p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
               aria-label="Close navigation sidebar"
             >
-              Close
+              <X className="w-5 h-5" />
             </button>
           )}
         </div>
@@ -178,7 +216,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onSelectRoute(item.id);
                         if (isMobileOpen) onCloseMobile();
                       }}
-                      className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition-all ${
+                      className={`group relative w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-all ${
                         isActive
                           ? 'bg-white/15 text-white shadow-xs font-semibold ring-1 ring-white/20'
                           : 'text-blue-100/80 hover:text-white hover:bg-white/10 font-medium'
@@ -190,8 +228,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <span className="absolute left-1 top-2 bottom-2 w-1 rounded-full bg-[#60A5FA]" />
                       )}
 
-                      {(!isCollapsed || isMobileOpen) ? (
-                        <>
+                      <div
+                        className={`shrink-0 transition-transform group-hover:scale-110 ${
+                          isActive ? 'text-[#60A5FA]' : 'text-blue-200/90'
+                        }`}
+                      >
+                        {item.icon}
+                      </div>
+
+                      {(!isCollapsed || isMobileOpen) && (
+                        <div className="flex-1 flex items-center justify-between overflow-hidden">
                           <span className="truncate text-left text-[13.5px] sm:text-sm tracking-wide">
                             {item.label}
                           </span>
@@ -200,11 +246,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               {item.badge}
                             </span>
                           )}
-                        </>
-                      ) : (
-                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-blue-200">
-                          {item.label.slice(0, 2)}
-                        </span>
+                        </div>
                       )}
 
                       {/* Collapsed Tooltip */}
@@ -225,10 +267,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-3 border-t border-white/10 bg-black/10">
           <button
             onClick={onToggleCollapse}
-            className="hidden lg:flex w-full items-center justify-center p-2.5 rounded-xl text-blue-200 hover:text-white hover:bg-white/10 transition-colors text-xs font-medium tracking-wide"
+            className="hidden lg:flex w-full items-center justify-center gap-2 p-2.5 rounded-xl text-blue-200 hover:text-white hover:bg-white/10 transition-colors text-xs font-medium tracking-wide"
             aria-label={isCollapsed ? 'Expand navigation sidebar' : 'Collapse navigation sidebar'}
           >
-            {isCollapsed ? 'Expand »' : '« Collapse Rail'}
+            {isCollapsed ? (
+              <ChevronRight className="w-4 h-4 text-blue-300" />
+            ) : (
+              <>
+                <ChevronLeft className="w-4 h-4 text-blue-300" />
+                <span>Collapse Rail</span>
+              </>
+            )}
           </button>
         </div>
       </aside>
