@@ -11,7 +11,7 @@
 
 HiveMind is an AI-powered collective memory and verification system for coding agents. Unlike conventional LLM coding assistants that operate in an ephemeral loop—forgetting past failures, hallucinating fixes, and repeatedly falling into the same concurrency bugs—HiveMind enforces a complete, empirical learning lifecycle:
 
-$$\text{Retrieve Prior Experience} \longrightarrow \text{Diagnose \& Propose} \longrightarrow \text{Execute Sandbox Tests} \longrightarrow \text{Verify Evidence} \longrightarrow \text{Persist to Graph DAG} \longrightarrow \text{Reuse on Future Tasks}$$
+> **Retrieve Prior Experience** ➔ **Diagnose & Propose** ➔ **Execute Sandbox Tests** ➔ **Verify Evidence** ➔ **Persist to Graph DAG** ➔ **Reuse on Future Tasks**
 
 The system pairs a **FastAPI backend** and **FalkorDB Graph Database** with an interactive **React 3D Workbench** featuring an animated blue sidebar navigation, 3D WebGL memory topology, agent reasoning timeline, evidence provenance inspector, and cross-task memory transfer demonstration.
 
