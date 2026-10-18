@@ -34,13 +34,13 @@ class GraphMemoryRepository:
             if any(host_str.startswith(prefix) for prefix in ("falkor://", "falkordb://", "redis://", "rediss://")):
                 self._client = FalkorDB.from_url(host_str)
             else:
-                kwargs: dict[str, Any] = {"host": self.host, "port": self.port}
+                port_num = int(self.port) if self.port else 6379
+                kwargs: dict[str, Any] = {"host": host_str, "port": port_num}
                 if self.password:
-                    kwargs["password"] = self.password
+                    kwargs["password"] = str(self.password).strip()
                 if self.username:
-                    kwargs["username"] = self.username
-                is_cloud = "falkordb.cloud" in host_str.lower() or "redislabs.com" in host_str.lower()
-                if self.ssl or is_cloud:
+                    kwargs["username"] = str(self.username).strip()
+                if self.ssl:
                     kwargs["ssl"] = True
                     kwargs["ssl_cert_reqs"] = None
                 self._client = FalkorDB(**kwargs)

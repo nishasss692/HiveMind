@@ -114,6 +114,26 @@ async def file_not_found_handler(request: Request, exc: FileNotFoundError):
     )
 
 
+@app.exception_handler(redis.exceptions.AuthenticationError)
+async def redis_auth_error_handler(
+    request: Request, exc: redis.exceptions.AuthenticationError
+):
+    """Handle FalkorDB authentication failures -> 502 Bad Gateway with clear diagnosis."""
+    logger.error(f"FalkorDB authentication failed: {exc}")
+    target = f"{settings.falkordb_host}:{settings.falkordb_port}"
+    has_pwd = bool(settings.falkordb_password and settings.falkordb_password.strip())
+    pwd_hint = "provided password was rejected" if has_pwd else "FALKORDB_PASSWORD is missing or empty"
+    return JSONResponse(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        content={
+            "detail": (
+                f"FalkorDB Authentication Failed at {target} ({pwd_hint}). "
+                f"Please copy the exact password from app.falkordb.cloud and set FALKORDB_PASSWORD in Render Environment Variables."
+            )
+        },
+    )
+
+
 @app.exception_handler(redis.exceptions.ConnectionError)
 async def redis_connection_error_handler(
     request: Request, exc: redis.exceptions.ConnectionError
