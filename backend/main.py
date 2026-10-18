@@ -30,10 +30,11 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-# Configure CORS (Objective 8: Restrict allowed origins appropriately for development setup)
+# Configure CORS (Objective 8: Allow development setup and production Vercel/Render origins)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_allowed_origins,
+    allow_origins=settings.cors_allowed_origins or ["*"],
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

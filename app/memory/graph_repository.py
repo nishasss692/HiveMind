@@ -18,20 +18,49 @@ class GraphMemoryRepository:
         username: str | None = None,
         ssl: bool = False,
     ) -> None:
-        kwargs: dict[str, Any] = {"host": host, "port": port}
-        if password:
-            kwargs["password"] = password
-        if username:
-            kwargs["username"] = username
-        if ssl:
-            kwargs["ssl"] = True
-        self.client = FalkorDB(**kwargs)
-        self.graph = self.client.select_graph(graph_name)
+        self.host = host
+        self.port = port
+        self.graph_name = graph_name
+        self.password = password
+        self.username = username
+        self.ssl = ssl
+        self._client: FalkorDB | None = None
+        self._graph: Any | None = None
+
+    @property
+    def client(self) -> FalkorDB:
+        if self._client is None:
+            kwargs: dict[str, Any] = {"host": self.host, "port": self.port}
+            if self.password:
+                kwargs["password"] = self.password
+            if self.username:
+                kwargs["username"] = self.username
+            if self.ssl:
+                kwargs["ssl"] = True
+            self._client = FalkorDB(**kwargs)
+        return self._client
+
+    @client.setter
+    def client(self, value: FalkorDB | None) -> None:
+        self._client = value
+
+    @property
+    def graph(self) -> Any:
+        if self._graph is None:
+            self._graph = self.client.select_graph(self.graph_name)
+        return self._graph
+
+    @graph.setter
+    def graph(self, value: Any) -> None:
+        self._graph = value
 
     def ping(self) -> bool:
         """Confirm that the graph can execute a query."""
-        self.graph.query("RETURN 1")
-        return True
+        try:
+            self.graph.query("RETURN 1")
+            return True
+        except Exception:
+            return False
 
     def save_experience(self, experience: ExperienceRecord) -> None:
         """Save an attempt and its related evidence without deleting history."""
